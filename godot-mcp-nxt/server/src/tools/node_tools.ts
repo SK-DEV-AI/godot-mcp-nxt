@@ -29,6 +29,26 @@ interface ListNodesParams {
   parent_path: string;
 }
 
+interface IntelligentNodeCreationParams {
+  scenePath: string;
+  nodeType: string;
+  context?: string;
+  position?: { x: number; y: number };
+  autoPosition?: boolean;
+  suggestedName?: string;
+}
+
+interface NodePropertyAutomationParams {
+  scenePath: string;
+  operations: Array<{
+    nodePattern: string; // Can be exact path or pattern like "*/Sprite*"
+    property: string;
+    value: any;
+    condition?: string; // Optional condition to filter nodes
+  }>;
+  preview?: boolean;
+}
+
 /**
  * Definition for node tools - operations that manipulate nodes in the scene tree
  */
@@ -142,22 +162,124 @@ export const nodeTools: MCPTool[] = [
     }),
     execute: async ({ parent_path }: ListNodesParams): Promise<string> => {
       const godot = getGodotConnection();
-      
+
       try {
         const result = await godot.sendCommand<CommandResult>('list_nodes', { parent_path });
-        
+
         if (result.children.length === 0) {
           return `No child nodes found under ${parent_path}`;
         }
-        
+
         // Format children for display
         const formattedChildren = result.children
           .map((child: any) => `${child.name} (${child.type}) - ${child.path}`)
           .join('\n');
-        
+
         return `Children of node at ${parent_path}:\n\n${formattedChildren}`;
       } catch (error) {
         throw new Error(`Failed to list nodes: ${(error as Error).message}`);
+      }
+    },
+  },
+
+  {
+    name: 'intelligent_node_creation',
+    description: 'Create nodes with smart positioning, naming, and context awareness',
+    parameters: z.object({
+      scenePath: z.string()
+        .describe('Path to the scene file where the node will be created'),
+      nodeType: z.string()
+        .describe('Type of node to create (e.g. "Sprite2D", "CollisionShape2D", "Area2D")'),
+      context: z.string().optional()
+        .describe('Context description for intelligent placement (e.g. "player character", "background layer")'),
+      position: z.object({
+        x: z.number(),
+        y: z.number()
+      }).optional()
+        .describe('Specific position for the node (optional - will be auto-calculated if not provided)'),
+      autoPosition: z.boolean().optional().default(true)
+        .describe('Whether to automatically determine optimal position'),
+      suggestedName: z.string().optional()
+        .describe('Suggested name for the node (optional - will be auto-generated)')
+    }),
+    execute: async ({ scenePath, nodeType, context, position, autoPosition = true, suggestedName }: IntelligentNodeCreationParams): Promise<string> => {
+      const godot = getGodotConnection();
+
+      try {
+        const result = await godot.sendCommand<CommandResult>('intelligent_node_creation', {
+          scenePath,
+          nodeType,
+          context,
+          position,
+          autoPosition,
+          suggestedName
+        });
+
+        let response = `Created ${nodeType} node "${result.nodeName}" at ${result.nodePath}`;
+
+        if (result.position) {
+          response += `\nPosition: (${result.position.x}, ${result.position.y})`;
+        }
+
+        if (result.suggestions && result.suggestions.length > 0) {
+          response += `\n\nSuggestions:\n${result.suggestions.map((s: string) => `- ${s}`).join('\n')}`;
+        }
+
+        return response;
+      } catch (error) {
+        throw new Error(`Failed to create node intelligently: ${(error as Error).message}`);
+      }
+    },
+  },
+
+  {
+    name: 'node_property_automation',
+    description: 'Apply property changes to multiple nodes based on patterns and conditions',
+    parameters: z.object({
+      scenePath: z.string()
+        .describe('Path to the scene file to modify'),
+      operations: z.array(z.object({
+        nodePattern: z.string()
+          .describe('Pattern to match nodes (e.g. "*/Sprite*", "/root/Player", "*Enemy*")'),
+        property: z.string()
+          .describe('Property to modify (e.g. "modulate", "position", "scale")'),
+        value: z.any()
+          .describe('New value for the property'),
+        condition: z.string().optional()
+          .describe('Optional condition to filter nodes (e.g. "visible == true")')
+      }))
+        .describe('Array of property operations to perform'),
+      preview: z.boolean().optional().default(false)
+        .describe('Whether to preview changes without applying them')
+    }),
+    execute: async ({ scenePath, operations, preview = false }: NodePropertyAutomationParams): Promise<string> => {
+      const godot = getGodotConnection();
+
+      try {
+        const result = await godot.sendCommand<CommandResult>('node_property_automation', {
+          scenePath,
+          operations,
+          preview
+        });
+
+        let response = preview ? 'PREVIEW MODE - No changes applied\n\n' : 'Changes applied successfully\n\n';
+
+        response += `Operations performed:\n`;
+        result.operations.forEach((op: any, index: number) => {
+          response += `${index + 1}. ${op.nodePattern} -> ${op.property} = ${JSON.stringify(op.value)}\n`;
+          response += `   Affected nodes: ${op.affectedCount}\n`;
+          if (op.affectedNodes && op.affectedNodes.length > 0) {
+            response += `   Nodes: ${op.affectedNodes.join(', ')}\n`;
+          }
+        });
+
+        if (result.warnings && result.warnings.length > 0) {
+          response += `\nWarnings:\n${result.warnings.map((w: string) => `- ${w}`).join('\n')}`;
+        }
+
+        return response;
+      } catch (error) {
+        throw new Error(`Failed to automate node properties: ${(error as Error).message}`);
       }
     },
   },

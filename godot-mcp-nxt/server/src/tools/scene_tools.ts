@@ -24,6 +24,24 @@ interface CreateResourceParams {
   properties?: Record<string, any>;
 }
 
+interface LiveSceneEditParams {
+  scenePath: string;
+  operations: Array<{
+    type: 'create_node' | 'modify_property' | 'delete_node' | 'move_node' | 'add_script' | 'set_signal';
+    target?: string;
+    parameters: any;
+  }>;
+  autoSave?: boolean;
+}
+
+interface BatchSceneOperationParams {
+  operations: Array<{
+    scenePath: string;
+    operation: LiveSceneEditParams['operations'][0];
+  }>;
+  autoSave?: boolean;
+}
+
 /**
  * Definition for scene tools - operations that manipulate Godot scenes
  */
@@ -147,17 +165,121 @@ export const sceneTools: MCPTool[] = [
     }),
     execute: async ({ resource_type, resource_path, properties = {} }: CreateResourceParams): Promise<string> => {
       const godot = getGodotConnection();
-      
+
       try {
         const result = await godot.sendCommand<CommandResult>('create_resource', {
           resource_type,
           resource_path,
           properties,
         });
-        
+
         return `Created ${resource_type} resource at ${result.resource_path}`;
       } catch (error) {
         throw new Error(`Failed to create resource: ${(error as Error).message}`);
+      }
+    },
+  },
+
+  {
+    name: 'live_scene_editor',
+    description: 'Edit scenes in real-time with immediate visual feedback and undo support',
+    parameters: z.object({
+      scenePath: z.string()
+        .describe('Path to the scene file to edit (e.g. "res://scenes/main.tscn")'),
+      operations: z.array(z.object({
+        type: z.enum(['create_node', 'modify_property', 'delete_node', 'move_node', 'add_script', 'set_signal'])
+          .describe('Type of operation to perform'),
+        target: z.string().optional()
+          .describe('Target node path for the operation (not needed for create_node)'),
+        parameters: z.any()
+          .describe('Parameters specific to the operation type')
+      }))
+        .describe('Array of operations to perform on the scene'),
+      autoSave: z.boolean().optional().default(true)
+        .describe('Whether to automatically save the scene after operations')
+    }),
+    execute: async ({ scenePath, operations, autoSave = true }: LiveSceneEditParams): Promise<string> => {
+      const godot = getGodotConnection();
+
+      try {
+        const results: string[] = [];
+        let operationCount = 0;
+
+        for (const operation of operations) {
+          operationCount++;
+          const result = await godot.sendCommand<CommandResult>('live_scene_edit', {
+            scenePath,
+            operation,
+            operationIndex: operationCount
+          });
+
+          results.push(`${operation.type}: ${result.message || 'Success'}`);
+        }
+
+        if (autoSave) {
+          await godot.sendCommand<CommandResult>('save_scene', { path: scenePath });
+          results.push('Scene auto-saved');
+        }
+
+        return `Live scene editing completed:\n${results.map((r, i) => `${i + 1}. ${r}`).join('\n')}`;
+      } catch (error) {
+        throw new Error(`Failed to perform live scene editing: ${(error as Error).message}`);
+      }
+    },
+  },
+
+  {
+    name: 'batch_scene_operations',
+    description: 'Apply operations across multiple scenes simultaneously',
+    parameters: z.object({
+      operations: z.array(z.object({
+        scenePath: z.string()
+          .describe('Path to the scene file'),
+        operation: z.object({
+          type: z.enum(['create_node', 'modify_property', 'delete_node', 'move_node', 'add_script', 'set_signal']),
+          target: z.string().optional(),
+          parameters: z.any()
+        })
+          .describe('Operation to perform on this scene')
+      }))
+        .describe('Array of scene operations to perform'),
+      autoSave: z.boolean().optional().default(true)
+        .describe('Whether to automatically save all scenes after operations')
+    }),
+    execute: async ({ operations, autoSave = true }: BatchSceneOperationParams): Promise<string> => {
+      const godot = getGodotConnection();
+
+      try {
+        const results: string[] = [];
+        const sceneResults = new Map<string, string[]>();
+
+        for (const { scenePath, operation } of operations) {
+          if (!sceneResults.has(scenePath)) {
+            sceneResults.set(scenePath, []);
+          }
+
+          const result = await godot.sendCommand<CommandResult>('live_scene_edit', {
+            scenePath,
+            operation
+          });
+
+          sceneResults.get(scenePath)!.push(`${operation.type}: ${result.message || 'Success'}`);
+        }
+
+        if (autoSave) {
+          for (const scenePath of Array.from(sceneResults.keys())) {
+            await godot.sendCommand<CommandResult>('save_scene', { path: scenePath });
+            sceneResults.get(scenePath)!.push('Scene saved');
+          }
+        }
+
+        for (const [scenePath, sceneOps] of Array.from(sceneResults.entries())) {
+          results.push(`${scenePath}:\n${sceneOps.map((op: string) => `  - ${op}`).join('\n')}`);
+        }
+
+        return `Batch operations completed:\n${results.join('\n\n')}`;
+      } catch (error) {
+        throw new Error(`Failed to perform batch scene operations: ${(error as Error).message}`);
       }
     },
   },

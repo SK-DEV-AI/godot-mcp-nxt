@@ -6,6 +6,7 @@ import { editorTools } from './tools/editor_tools.js';
 import { cliTools } from './tools/cli_tools.js';
 import { codeAnalysisTools } from './tools/code_analysis_tools.js';
 import { performanceTools } from './tools/performance_tools.js';
+import { advancedTools } from './tools/advanced_tools.js';
 import { getGodotConnection } from './utils/godot_connection.js';
 import { setupCacheCleanup } from './utils/cache.js';
 
@@ -46,7 +47,7 @@ async function main() {
   });
 
   // Register all tools
-  [...nodeTools, ...scriptTools, ...sceneTools, ...editorTools, ...cliTools, ...codeAnalysisTools, ...performanceTools].forEach(tool => {
+  [...nodeTools, ...scriptTools, ...sceneTools, ...editorTools, ...cliTools, ...codeAnalysisTools, ...performanceTools, ...advancedTools].forEach(tool => {
     server.addTool(tool);
   });
 
