@@ -194,9 +194,6 @@ unified-godot-mcp/
 └── scripts/               # CLI operation scripts
 ```
 
-## Contributing
-
-Contributions welcome! Please see the contributing guidelines and ensure all tests pass.
 
 ## License
 
