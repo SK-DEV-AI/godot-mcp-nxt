@@ -19,6 +19,9 @@ func process_command(client_id: int, command_type: String, params: Dictionary, c
 		"list_project_resources":
 			_list_project_resources(client_id, params, command_id)
 			return true
+		"get_performance_metrics":
+			_get_performance_metrics(client_id, params, command_id)
+			return true
 	return false  # Command not handled
 
 func _get_project_info(client_id: int, _params: Dictionary, command_id: String) -> void:
@@ -122,8 +125,36 @@ func _analyze_project_structure(dir: DirAccess, path: String, structure: Diction
 				structure["file_counts"][extension] = 1
 		
 		file_name = dir.get_next()
-	
+
 	dir.list_dir_end()
+
+func _get_performance_metrics(client_id: int, params: Dictionary, command_id: String) -> void:
+	var include_system_info = params.get("include_system_info", false)
+
+	var metrics = {
+		"fps": Performance.get_monitor(Performance.TIME_FPS),
+		"frame_time": Performance.get_monitor(Performance.TIME_PROCESS) * 1000, # Convert to milliseconds
+		"memory_usage": Performance.get_monitor(Performance.MEMORY_STATIC),
+		"draw_calls": Performance.get_monitor(Performance.RENDER_TOTAL_DRAW_CALLS_IN_FRAME),
+		"objects_drawn": Performance.get_monitor(Performance.RENDER_TOTAL_OBJECTS_IN_FRAME),
+		"vertices_drawn": Performance.get_monitor(Performance.RENDER_TOTAL_PRIMITIVES_IN_FRAME)
+	}
+
+	# Add system info if requested
+	if include_system_info:
+		var system_info = {
+			"os_name": OS.get_name(),
+			"os_version": OS.get_version(),
+			"processor_count": OS.get_processor_count(),
+			"processor_name": OS.get_processor_name(),
+			"video_adapter_name": RenderingServer.get_video_adapter_name(),
+			"video_adapter_vendor": RenderingServer.get_video_adapter_vendor(),
+			"video_adapter_type": RenderingServer.get_video_adapter_type(),
+			"video_adapter_api_version": RenderingServer.get_video_adapter_api_version()
+		}
+		metrics["system_info"] = system_info
+
+	_send_success(client_id, metrics, command_id)
 
 func _get_project_settings(client_id: int, params: Dictionary, command_id: String) -> void:
 	# Get relevant project settings

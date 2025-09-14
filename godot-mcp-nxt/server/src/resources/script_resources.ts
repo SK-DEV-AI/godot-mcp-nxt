@@ -3,35 +3,76 @@ import { getGodotConnection } from '../utils/godot_connection.js';
 import { z } from 'zod';
 
 /**
- * Resource that provides the content of a specific script
- * Note: As a Resource (not ResourceTemplate), it cannot handle dynamic paths
+ * Resource template for individual script content
+ * URI pattern: godot/script/{script_path}
  */
-export const scriptResource: Resource = {
-    uri: 'godot/script',
-    name: 'Godot Script Content',
+export const scriptContentTemplate: ResourceTemplate = {
+  uriTemplate: 'godot/script/{script_path}',
+  name: 'Godot Script Content',
+  description: 'Source code content of a specific Godot script file',
+  mimeType: 'text/plain',
+  arguments: [
+    {
+      name: 'script_path',
+      description: 'Path to the script file (e.g., "res://scripts/player.gd")',
+    },
+  ],
+  async load(args) {
+    const godot = getGodotConnection();
+
+    try {
+      // Call the Godot command to get script content
+      const result = await godot.sendCommand('get_script', {
+        script_path: args.script_path
+      });
+
+      return {
+        text: result.content,
+        metadata: {
+          path: result.script_path,
+          language: args.script_path.endsWith('.gd') ? 'gdscript' :
+                   args.script_path.endsWith('.cs') ? 'csharp' : 'unknown'
+        }
+      };
+    } catch (error) {
+      console.error('Error fetching script content:', error);
+      throw error;
+    }
+  }
+};
+
+/**
+ * Resource that provides the content of the currently edited script
+ */
+export const currentScriptContentResource: Resource = {
+    uri: 'godot/script/current',
+    name: 'Godot Current Script Content',
     mimeType: 'text/plain',
     async load() {
         const godot = getGodotConnection();
-        
+
         try {
-            // Without parameters, this can only load a predefined script
-            // You would need to hardcode the script path here
-            const scriptPath = 'res://default_script.gd';
-            
-            const result = await godot.sendCommand('get_script', {
-                path: scriptPath
-            });
-            
-            return {
-                text: result.content,
-                metadata: {
-                    path: result.script_path,
-                    language: scriptPath.endsWith('.gd') ? 'gdscript' : 
-                                     scriptPath.endsWith('.cs') ? 'csharp' : 'unknown'
-                }
-            };
+            const result = await godot.sendCommand('get_current_script', {});
+
+            if (result.script_found) {
+                return {
+                    text: result.content,
+                    metadata: {
+                        path: result.script_path,
+                        language: result.script_path.endsWith('.gd') ? 'gdscript' :
+                                 result.script_path.endsWith('.cs') ? 'csharp' : 'unknown'
+                    }
+                };
+            } else {
+                return {
+                    text: 'No script is currently being edited',
+                    metadata: {
+                        script_found: false
+                    }
+                };
+            }
         } catch (error) {
-            console.error('Error fetching script content:', error);
+            console.error('Error fetching current script content:', error);
             throw error;
         }
     }

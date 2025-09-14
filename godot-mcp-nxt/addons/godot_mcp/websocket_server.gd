@@ -10,9 +10,14 @@ signal command_received(client_id, command)
 var tcp_server = TCPServer.new()
 var peers = {}
 var pending_peers = []
+var connection_queue = [] # Queue for connections when at max capacity
 var _port = 9080
 var refuse_new_connections = false
 var handshake_timeout = 3000 # ms
+var max_connections = 10 # Maximum concurrent connections
+var queue_size = 5 # Maximum queued connections
+var compression_enabled = true # Enable WebSocket compression
+var compression_min_size = 1024 # Minimum message size for compression (bytes)
 
 class PendingPeer:
 	var tcp: StreamPeerTCP
@@ -50,24 +55,41 @@ func start_server() -> int:
 func stop_server() -> void:
 	if is_server_active():
 		tcp_server.stop()
-		
+
 		# Close all client connections
 		for client_id in peers.keys():
 			peers[client_id].close()
 		peers.clear()
 		pending_peers.clear()
-		
+
+		# Clear connection queue
+		for queued_peer in connection_queue:
+			if queued_peer and queued_peer.tcp:
+				queued_peer.tcp.disconnect_from_host()
+		connection_queue.clear()
+
 		set_process(false)
 		print("MCP WebSocket server stopped")
 
 func poll() -> void:
 	if not tcp_server.is_listening():
 		return
-		
+
 	# Accept any incoming TCP connections
 	while not refuse_new_connections and tcp_server.is_connection_available():
 		var conn = tcp_server.take_connection()
 		assert(conn != null)
+
+		# Check connection limits
+		if peers.size() >= max_connections:
+			if connection_queue.size() < queue_size:
+				print("Connection limit reached (%d/%d), queuing connection..." % [peers.size(), max_connections])
+				connection_queue.append(PendingPeer.new(conn))
+			else:
+				print("Connection limit reached (%d/%d) and queue full (%d), refusing connection" % [peers.size(), max_connections, queue_size])
+				conn.disconnect_from_host()
+			continue
+
 		print("New TCP connection, starting WebSocket handshake...")
 		pending_peers.append(PendingPeer.new(conn))
 	
@@ -118,6 +140,9 @@ func poll() -> void:
 	for r in to_remove:
 		peers.erase(r)
 
+	# Process queued connections if slots are available
+	_process_connection_queue()
+
 func _connect_pending(p: PendingPeer) -> bool:
 	if p.ws != null:
 		# Poll websocket client if doing handshake
@@ -143,6 +168,12 @@ func _connect_pending(p: PendingPeer) -> bool:
 			print("TCP connected, upgrading to WebSocket...")
 			p.ws = WebSocketPeer.new()
 			p.ws.accept_stream(p.tcp)
+
+			# Enable compression if configured
+			if compression_enabled:
+				p.ws.set_compression_mode(WebSocketPeer.COMPRESSION_DEFLATE)
+				print("WebSocket compression enabled (deflate)")
+
 			return false # WebSocketPeer connection is pending.
 
 func send_response(client_id: int, response: Dictionary) -> int:
@@ -174,3 +205,46 @@ func get_port() -> int:
 
 func get_client_count() -> int:
 	return peers.size()
+
+func _process_connection_queue() -> void:
+	# Process queued connections if we have available slots
+	while peers.size() < max_connections and not connection_queue.is_empty():
+		var queued_peer = connection_queue.pop_front()
+		if queued_peer and queued_peer.tcp.get_status() == StreamPeerTCP.STATUS_CONNECTED:
+			print("Processing queued connection...")
+			pending_peers.append(queued_peer)
+		elif queued_peer:
+			# Connection may have been lost while queued
+			print("Queued connection lost, discarding...")
+			queued_peer.tcp.disconnect_from_host()
+
+func set_max_connections(new_limit: int) -> void:
+	max_connections = max(1, new_limit) # Minimum 1 connection
+	print("Max connections set to: %d" % max_connections)
+
+func set_queue_size(new_size: int) -> void:
+	queue_size = max(0, new_size) # Allow 0 to disable queuing
+	print("Queue size set to: %d" % queue_size)
+
+func get_max_connections() -> int:
+	return max_connections
+
+func get_queue_size() -> int:
+	return queue_size
+
+func get_queued_connection_count() -> int:
+	return connection_queue.size()
+
+func set_compression_enabled(enabled: bool) -> void:
+	compression_enabled = enabled
+	print("WebSocket compression " + ("enabled" if enabled else "disabled"))
+
+func set_compression_min_size(min_size: int) -> void:
+	compression_min_size = max(0, min_size)
+	print("WebSocket compression minimum size set to: %d bytes" % compression_min_size)
+
+func is_compression_enabled() -> bool:
+	return compression_enabled
+
+func get_compression_min_size() -> int:
+	return compression_min_size

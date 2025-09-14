@@ -6,6 +6,8 @@ import { readdirSync, existsSync } from 'fs';
 import { spawn } from 'child_process';
 import { promisify } from 'util';
 import { exec } from 'child_process';
+import { getCachedGodotPath, getCachedProjectStructure } from '../utils/cache.js';
+import { retryGodotOperation } from '../utils/retry.js';
 
 const execAsync = promisify(exec);
 
@@ -76,8 +78,9 @@ async function isValidGodotPath(path: string): Promise<boolean> {
 }
 
 async function executeOperation(operation: string, params: any, projectPath: string): Promise<{ stdout: string; stderr: string }> {
+  // Use cached Godot path
   if (!godotPath) {
-    await detectGodotPath();
+    godotPath = await getCachedGodotPath();
     if (!godotPath) {
       throw new Error('Could not find a valid Godot executable path');
     }
@@ -104,8 +107,15 @@ async function executeOperation(operation: string, params: any, projectPath: str
   ].join(' ');
 
   try {
-    const { stdout, stderr } = await execAsync(cmd);
-    return { stdout, stderr };
+    const result = await retryGodotOperation(
+      async () => {
+        const { stdout, stderr } = await execAsync(cmd);
+        return { stdout, stderr };
+      },
+      `Godot operation: ${operation}`,
+      { maxAttempts: 2, initialDelay: 1000 }
+    );
+    return result;
   } catch (error: any) {
     if (error.stdout && error.stderr) {
       return { stdout: error.stdout, stderr: error.stderr };
@@ -160,55 +170,8 @@ function findGodotProjects(directory: string, recursive: boolean): Array<{ path:
   return projects;
 }
 
-function getProjectStructureAsync(projectPath: string): Promise<any> {
-  return new Promise((resolve) => {
-    try {
-      const structure = {
-        scenes: 0,
-        scripts: 0,
-        assets: 0,
-        other: 0,
-      };
-
-      const scanDirectory = (currentPath: string) => {
-        const entries = readdirSync(currentPath, { withFileTypes: true });
-
-        for (const entry of entries) {
-          const entryPath = join(currentPath, entry.name);
-
-          if (entry.name.startsWith('.')) continue;
-
-          if (entry.isDirectory()) {
-            scanDirectory(entryPath);
-          } else if (entry.isFile()) {
-            const ext = entry.name.split('.').pop()?.toLowerCase();
-
-            if (ext === 'tscn') {
-              structure.scenes++;
-            } else if (ext === 'gd' || ext === 'gdscript' || ext === 'cs') {
-              structure.scripts++;
-            } else if (['png', 'jpg', 'jpeg', 'webp', 'svg', 'ttf', 'wav', 'mp3', 'ogg'].includes(ext || '')) {
-              structure.assets++;
-            } else {
-              structure.other++;
-            }
-          }
-        }
-      };
-
-      scanDirectory(projectPath);
-      resolve(structure);
-    } catch (error) {
-      resolve({
-        error: 'Failed to get project structure',
-        scenes: 0,
-        scripts: 0,
-        assets: 0,
-        other: 0
-      });
-    }
-  });
-}
+// Use the cached version from utils/cache.ts
+const getProjectStructureAsync = getCachedProjectStructure;
 
 // CLI-based tools
 export const cliTools: MCPTool[] = [
@@ -371,8 +334,11 @@ export const cliTools: MCPTool[] = [
     parameters: z.object({
       projectPath: z.string().describe('Path to the Godot project directory'),
     }),
-    execute: async ({ projectPath }) => {
-      const result = await handleUpdateProjectUids({ projectPath });
+    annotations: {
+      streamingHint: true,
+    },
+    execute: async (args: any, context?: { reportProgress?: any; streamContent?: any }) => {
+      const result = await handleUpdateProjectUids(args, context);
       return result.content[0].text;
     },
   },
@@ -795,7 +761,7 @@ async function handleGetUid(args: any) {
   };
 }
 
-async function handleUpdateProjectUids(args: any) {
+async function handleUpdateProjectUids(args: any, context?: { reportProgress?: any; streamContent?: any }) {
   if (!args.projectPath) {
     throw new Error('Project path is required');
   }
@@ -817,11 +783,47 @@ async function handleUpdateProjectUids(args: any) {
     throw new Error(`UIDs are only supported in Godot 4.4 or later. Current version: ${version}`);
   }
 
+  // Report initial progress
+  if (context?.reportProgress) {
+    await context.reportProgress({ progress: 0, total: 100 });
+  }
+
+  if (context?.streamContent) {
+    await context.streamContent({ type: 'text', text: 'Starting UID update process...\n' });
+  }
+
+  // Simulate progress for preparation
+  if (context?.reportProgress) {
+    await context.reportProgress({ progress: 10, total: 100 });
+  }
+
   const params = { projectPath: args.projectPath };
+
+  if (context?.streamContent) {
+    await context.streamContent({ type: 'text', text: 'Scanning project files...\n' });
+  }
+
+  // Simulate progress for file scanning
+  if (context?.reportProgress) {
+    await context.reportProgress({ progress: 30, total: 100 });
+  }
+
   const { stdout, stderr } = await executeOperation('resave_resources', params, args.projectPath);
 
   if (stderr && stderr.includes('Failed to')) {
+    if (context?.streamContent) {
+      await context.streamContent({ type: 'text', text: `Error: ${stderr}\n` });
+    }
     throw new Error(`Failed to update project UIDs: ${stderr}`);
+  }
+
+  // Report completion
+  if (context?.reportProgress) {
+    await context.reportProgress({ progress: 100, total: 100 });
+  }
+
+  if (context?.streamContent) {
+    await context.streamContent({ type: 'text', text: 'UID update completed successfully.\n' });
   }
 
   return {

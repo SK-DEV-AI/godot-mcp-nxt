@@ -4,22 +4,28 @@ import { scriptTools } from './tools/script_tools.js';
 import { sceneTools } from './tools/scene_tools.js';
 import { editorTools } from './tools/editor_tools.js';
 import { cliTools } from './tools/cli_tools.js';
+import { codeAnalysisTools } from './tools/code_analysis_tools.js';
+import { performanceTools } from './tools/performance_tools.js';
 import { getGodotConnection } from './utils/godot_connection.js';
+import { setupCacheCleanup } from './utils/cache.js';
 
 // Import resources
-import { 
-  sceneListResource, 
-  sceneStructureResource 
+import {
+  sceneListResource,
+  sceneStructureTemplate,
+  currentSceneStructureResource
 } from './resources/scene_resources.js';
-import { 
-  scriptResource, 
+import {
+  scriptContentTemplate,
+  currentScriptContentResource,
   scriptListResource,
-  scriptMetadataResource 
+  scriptMetadataResource
 } from './resources/script_resources.js';
-import { 
+import {
   projectStructureResource,
   projectSettingsResource,
-  projectResourcesResource 
+  projectResourcesResource,
+  projectFilesByTypeTemplate
 } from './resources/project_resources.js';
 import { 
   editorStateResource,
@@ -40,31 +46,44 @@ async function main() {
   });
 
   // Register all tools
-  [...nodeTools, ...scriptTools, ...sceneTools, ...editorTools, ...cliTools].forEach(tool => {
+  [...nodeTools, ...scriptTools, ...sceneTools, ...editorTools, ...cliTools, ...codeAnalysisTools, ...performanceTools].forEach(tool => {
     server.addTool(tool);
   });
 
-  // Register all resources - batch registration for better organization
-  const allResources = [
+  // Register static resources
+  const staticResources = [
     sceneListResource,
+    currentSceneStructureResource,
     scriptListResource,
+    currentScriptContentResource,
     projectStructureResource,
     projectSettingsResource,
     projectResourcesResource,
     editorStateResource,
     selectedNodeResource,
     currentScriptResource,
-    sceneStructureResource,
-    scriptResource,
     scriptMetadataResource,
   ];
 
-  allResources.forEach(resource => {
+  staticResources.forEach(resource => {
     server.addResource(resource);
+  });
+
+  // Register resource templates
+  const resourceTemplates = [
+    sceneStructureTemplate,
+    scriptContentTemplate,
+    projectFilesByTypeTemplate,
+  ];
+
+  resourceTemplates.forEach(template => {
+    server.addResourceTemplate(template);
   });
 
   // Note: WebSocket connection is lazy - only established when WebSocket tools are called
 
+  // Set up cache cleanup
+  setupCacheCleanup();
 
   // Start the server
   server.start({

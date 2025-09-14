@@ -7,7 +7,13 @@ export interface MCPTool<T = any> {
   name: string;
   description: string;
   parameters: z.ZodType<T>;
-  execute: (args: T) => Promise<string>;
+  execute: (args: T, context?: { reportProgress?: any; streamContent?: any }) => Promise<any>;
+  annotations?: {
+    streamingHint?: boolean;
+    readOnlyHint?: boolean;
+    openWorldHint?: boolean;
+    title?: string;
+  };
 }
 
 /**
