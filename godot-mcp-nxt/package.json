@@ -1,0 +1,33 @@
+{
+  "name": "godot-mcp-nxt",
+  "version": "1.0.0",
+  "description": "Godot MCP Server using FastMCP",
+  "type": "module",
+  "main": "dist/index.js",
+  "scripts": {
+    "build": "tsc",
+    "start": "node dist/index.js",
+    "dev": "nodemon --watch src --exec \"tsc && node dist/index.js\"",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [
+    "godot",
+    "mcp",
+    "fastmcp",
+    "claude",
+    "ai"
+  ],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "fastmcp": "^1.20.4",
+    "ws": "^8.13.0",
+    "zod": "^3.21.4"
+  },
+  "devDependencies": {
+    "@types/node": "^20.3.1",
+    "@types/ws": "^8.5.5",
+    "nodemon": "^3.1.10",
+    "typescript": "^5.1.3"
+  }
+}
