@@ -36,7 +36,41 @@ interface CreateScriptTemplateParams {
 export const scriptTools: MCPTool[] = [
   {
     name: 'script_manager',
-    description: 'Unified tool for all script operations: create, edit, read, generate templates, and AI-powered script generation',
+    description: `📝 UNIFIED SCRIPT MANAGER - Complete GDScript Lifecycle Management
+
+USAGE WORKFLOW:
+1. 📝 CREATE: Use operation="create" with script_path and content
+2. 🤖 GENERATE: Use operation="generate_ai" for AI-powered script creation
+3. 📋 TEMPLATE: Use operation="generate_template" for boilerplate code
+4. ✏️ EDIT: Use operation="edit" to modify existing scripts
+5. 👁️ READ: Use operation="read" to examine script content
+
+COMMON PITFALLS TO AVOID:
+❌ DON'T forget script_path for create/edit operations
+❌ DON'T use invalid GDScript syntax in content
+❌ DON'T forget description for AI generation
+❌ DON'T use wrong file extensions (.gd required)
+❌ DON'T try to read without script_path or node_path
+
+EXAMPLES:
+✅ Create script: {operation: "create", script_path: "res://player.gd", content: "extends Node\nfunc _ready():\n\tpass"}
+✅ AI generate: {operation: "generate_ai", description: "Create a 2D player controller with movement"}
+✅ Template: {operation: "generate_template", extends_type: "Node2D", include_ready: true}
+✅ Edit script: {operation: "edit", script_path: "res://player.gd", content: "extends Node\nfunc _ready():\n\tprint('Hello!')"}
+✅ Read script: {operation: "read", script_path: "res://player.gd"}
+
+PREREQUISITES:
+- Valid GDScript syntax for content
+- Script paths must use .gd extension
+- For AI generation: descriptive prompt required
+- For templates: valid Godot base classes (Node, Node2D, CharacterBody2D, etc.)
+
+ERROR PREVENTION:
+- Always validate GDScript syntax before submission
+- Use res:// prefix for project-relative paths
+- Test AI descriptions are specific and clear
+- Verify base classes exist in your Godot version
+- Check file permissions for script operations`,
     parameters: z.object({
       operation: z.enum(['create', 'edit', 'read', 'generate_template', 'generate_ai'])
         .describe('Type of script operation to perform'),

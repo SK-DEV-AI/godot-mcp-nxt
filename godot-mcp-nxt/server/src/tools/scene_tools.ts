@@ -48,7 +48,46 @@ interface BatchSceneOperationParams {
 export const sceneTools: MCPTool[] = [
   {
     name: 'scene_manager',
-    description: 'Unified tool for all scene operations: create, save, open, edit, and resource management',
+    description: `🎬 UNIFIED SCENE MANAGER - Complete Scene and Resource Lifecycle Management
+
+USAGE WORKFLOW:
+1. 📁 CREATE: Use operation="create_scene" to make new scenes
+2. 📂 OPEN: Use operation="open_scene" to load existing scenes
+3. ✏️ EDIT: Use operation="edit_scene" for live scene modifications
+4. 💾 SAVE: Use operation="save_scene" to persist changes
+5. 📊 INFO: Use operation="get_current_scene" or "get_project_info" for status
+6. 📦 RESOURCE: Use operation="create_resource" for assets
+7. 🔄 BATCH: Use operation="batch_edit" for multi-scene operations
+
+COMMON PITFALLS TO AVOID:
+❌ DON'T try scene operations without Godot Editor running
+❌ DON'T use invalid scene paths (.tscn extension required)
+❌ DON'T forget path for create_scene and open_scene operations
+❌ DON'T use wrong root_node_type (must be valid Godot node class)
+❌ DON'T try to edit scenes that aren't open
+❌ DON'T forget operations array for edit_scene
+
+EXAMPLES:
+✅ Create scene: {operation: "create_scene", path: "res://main.tscn", root_node_type: "Node2D"}
+✅ Open scene: {operation: "open_scene", path: "res://main.tscn"}
+✅ Edit scene: {operation: "edit_scene", path: "res://main.tscn", operations: [{type: "create_node", target: "/root", parameters: {node_type: "Sprite2D"}}]}
+✅ Get info: {operation: "get_project_info"}
+✅ Create resource: {operation: "create_resource", resource_type: "Texture", path: "res://icon.png"}
+
+PREREQUISITES:
+- Godot Editor must be running and connected
+- Scene paths must use .tscn extension
+- Resource paths must use appropriate extensions (.png, .wav, etc.)
+- Valid Godot node types (Node2D, Sprite2D, CharacterBody2D, etc.)
+- Valid Godot resource types (Texture, AudioStream, etc.)
+
+ERROR PREVENTION:
+- Always verify Godot Editor is running before operations
+- Use res:// prefix for project-relative paths
+- Test scene paths exist before opening
+- Verify node types exist in your Godot version
+- Check resource types are supported
+- Ensure operations array is properly formatted for editing`,
     parameters: z.object({
       operation: z.enum(['create_scene', 'save_scene', 'open_scene', 'get_current_scene', 'get_project_info', 'create_resource', 'edit_scene', 'batch_edit'])
         .describe('Type of scene operation to perform'),

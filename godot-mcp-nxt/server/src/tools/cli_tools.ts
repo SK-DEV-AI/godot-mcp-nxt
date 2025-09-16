@@ -131,7 +131,45 @@ const getProjectStructureAsync = getCachedProjectStructure;
 export const cliTools: MCPTool[] = [
   {
     name: 'project_manager',
-    description: 'Unified tool for all project operations: launch editor, run project, health checks, setup, and project discovery',
+    description: `🚀 UNIFIED PROJECT MANAGER - Complete Godot Project Lifecycle Management
+
+USAGE WORKFLOW:
+1. 🔍 DISCOVER: Use operation="list_projects" to find Godot projects
+2. 🏗️ SETUP: Use operation="quick_setup" to create new projects
+3. 📝 LAUNCH: Use operation="launch_editor" to open in Godot Editor
+4. ▶️ RUN: Use operation="run_project" to test your game
+5. 🔍 DEBUG: Use operation="get_debug_output" to see runtime output
+6. 🩺 HEALTH: Use operation="health_check" to validate project
+7. 📊 INFO: Use operation="get_godot_version" for version info
+8. ⏹️ STOP: Use operation="stop_project" to end running games
+
+COMMON PITFALLS TO AVOID:
+❌ DON'T try project operations without valid project.godot file
+❌ DON'T forget projectPath for most operations
+❌ DON'T try to run projects without Godot executable
+❌ DON'T use invalid directory paths for project discovery
+❌ DON'T forget to stop running projects before starting new ones
+
+EXAMPLES:
+✅ List projects: {operation: "list_projects", directory: "/home/user/projects", recursive: true}
+✅ Quick setup: {operation: "quick_setup", projectPath: "/home/user/projects", projectName: "MyGame"}
+✅ Launch editor: {operation: "launch_editor", projectPath: "/home/user/projects/MyGame"}
+✅ Run project: {operation: "run_project", projectPath: "/home/user/projects/MyGame"}
+✅ Health check: {operation: "health_check", projectPath: "/home/user/projects/MyGame"}
+✅ Get version: {operation: "get_godot_version"}
+
+PREREQUISITES:
+- Valid Godot installation (auto-detected or set GODOT_PATH)
+- project.godot file must exist in project directories
+- Proper file permissions for project directories
+- Godot Editor closed when running projects in debug mode
+
+ERROR PREVENTION:
+- Always verify project.godot exists before operations
+- Check Godot executable path with get_godot_version first
+- Use absolute paths for project directories
+- Ensure no other Godot processes are running on same project
+- Test project paths exist before operations`,
     parameters: z.object({
       operation: z.enum(['launch_editor', 'run_project', 'get_debug_output', 'stop_project', 'get_godot_version', 'list_projects', 'health_check', 'quick_setup'])
         .describe('Type of project operation to perform'),

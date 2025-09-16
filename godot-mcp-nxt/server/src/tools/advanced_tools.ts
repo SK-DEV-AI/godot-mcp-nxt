@@ -899,4 +899,85 @@ export const advancedTools: MCPTool[] = [
       }
     },
   },
+
+  {
+    name: 'game_development_workflow',
+    description: 'Orchestrate complete game development workflow from concept to playable prototype',
+    parameters: z.object({
+      gameConcept: z.string()
+        .describe('High-level description of the game concept'),
+      targetPlatform: z.enum(['desktop', 'mobile', 'web', 'console'])
+        .describe('Primary target platform'),
+      gameType: z.enum(['action', 'puzzle', 'adventure', 'rpg', 'simulation', 'sports'])
+        .describe('Type of game to develop'),
+      scope: z.enum(['prototype', 'full_game', 'mvp'])
+        .describe('Development scope'),
+      features: z.array(z.string())
+        .describe('Key features to include'),
+      artStyle: z.string().optional()
+        .describe('Art style description'),
+      audioRequirements: z.array(z.string()).optional()
+        .describe('Audio requirements (music, sfx, voice)'),
+      estimatedDuration: z.number().optional()
+        .describe('Estimated development time in hours')
+    }),
+    execute: async (params: any): Promise<string> => {
+      const godot = getGodotConnection();
+
+      try {
+        const result = await godot.sendCommand<CommandResult>('game_development_workflow', {
+          gameConcept: params.gameConcept,
+          targetPlatform: params.targetPlatform,
+          gameType: params.gameType,
+          scope: params.scope,
+          features: params.features || [],
+          artStyle: params.artStyle,
+          audioRequirements: params.audioRequirements,
+          estimatedDuration: params.estimatedDuration
+        });
+
+        let response = `🎮 Game Development Workflow Initiated!\n\n`;
+        response += `Concept: ${params.gameConcept}\n`;
+        response += `Type: ${params.gameType}\n`;
+        response += `Platform: ${params.targetPlatform}\n`;
+        response += `Scope: ${params.scope}\n`;
+        response += `Features: ${params.features?.join(', ') || 'Basic gameplay'}\n\n`;
+
+        if (result.workflow_steps && result.workflow_steps.length > 0) {
+          response += `📋 Development Roadmap:\n`;
+          result.workflow_steps.forEach((step: any, index: number) => {
+            response += `${index + 1}. ${step.name}\n`;
+            if (step.description) response += `   ${step.description}\n`;
+            if (step.estimated_time) response += `   ⏱️ ${step.estimated_time} hours\n`;
+            response += '\n';
+          });
+        }
+
+        if (result.generated_assets && result.generated_assets.length > 0) {
+          response += `🎨 Generated Assets:\n`;
+          result.generated_assets.forEach((asset: string, index: number) => {
+            response += `${index + 1}. ${asset}\n`;
+          });
+          response += '\n';
+        }
+
+        response += `🚀 Next Steps:\n`;
+        response += `1. Review generated project structure\n`;
+        response += `2. Customize assets and gameplay\n`;
+        response += `3. Test core mechanics\n`;
+        response += `4. Iterate and refine\n`;
+        response += `5. Deploy to target platform\n\n`;
+
+        response += `💡 Pro Tips:\n`;
+        response += `- Start with core gameplay loop\n`;
+        response += `- Use version control for all changes\n`;
+        response += `- Test frequently on target platform\n`;
+        response += `- Get player feedback early\n`;
+
+        return response;
+      } catch (error) {
+        throw new Error(`Game development workflow failed: ${(error as Error).message}`);
+      }
+    },
+  },
 ];

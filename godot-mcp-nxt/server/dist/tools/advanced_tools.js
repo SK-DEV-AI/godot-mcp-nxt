@@ -882,5 +882,92 @@ export var advancedTools = [
             });
         }); },
     },
+    {
+        name: 'game_development_workflow',
+        description: 'Orchestrate complete game development workflow from concept to playable prototype',
+        parameters: z.object({
+            gameConcept: z.string()
+                .describe('High-level description of the game concept'),
+            targetPlatform: z.enum(['desktop', 'mobile', 'web', 'console'])
+                .describe('Primary target platform'),
+            gameType: z.enum(['action', 'puzzle', 'adventure', 'rpg', 'simulation', 'sports'])
+                .describe('Type of game to develop'),
+            scope: z.enum(['prototype', 'full_game', 'mvp'])
+                .describe('Development scope'),
+            features: z.array(z.string())
+                .describe('Key features to include'),
+            artStyle: z.string().optional()
+                .describe('Art style description'),
+            audioRequirements: z.array(z.string()).optional()
+                .describe('Audio requirements (music, sfx, voice)'),
+            estimatedDuration: z.number().optional()
+                .describe('Estimated development time in hours')
+        }),
+        execute: function (params) { return __awaiter(void 0, void 0, void 0, function () {
+            var godot, result, response_5, error_13;
+            var _a;
+            return __generator(this, function (_b) {
+                switch (_b.label) {
+                    case 0:
+                        godot = getGodotConnection();
+                        _b.label = 1;
+                    case 1:
+                        _b.trys.push([1, 3, , 4]);
+                        return [4 /*yield*/, godot.sendCommand('game_development_workflow', {
+                                gameConcept: params.gameConcept,
+                                targetPlatform: params.targetPlatform,
+                                gameType: params.gameType,
+                                scope: params.scope,
+                                features: params.features || [],
+                                artStyle: params.artStyle,
+                                audioRequirements: params.audioRequirements,
+                                estimatedDuration: params.estimatedDuration
+                            })];
+                    case 2:
+                        result = _b.sent();
+                        response_5 = "\uD83C\uDFAE Game Development Workflow Initiated!\n\n";
+                        response_5 += "Concept: ".concat(params.gameConcept, "\n");
+                        response_5 += "Type: ".concat(params.gameType, "\n");
+                        response_5 += "Platform: ".concat(params.targetPlatform, "\n");
+                        response_5 += "Scope: ".concat(params.scope, "\n");
+                        response_5 += "Features: ".concat(((_a = params.features) === null || _a === void 0 ? void 0 : _a.join(', ')) || 'Basic gameplay', "\n\n");
+                        if (result.workflow_steps && result.workflow_steps.length > 0) {
+                            response_5 += "\uD83D\uDCCB Development Roadmap:\n";
+                            result.workflow_steps.forEach(function (step, index) {
+                                response_5 += "".concat(index + 1, ". ").concat(step.name, "\n");
+                                if (step.description)
+                                    response_5 += "   ".concat(step.description, "\n");
+                                if (step.estimated_time)
+                                    response_5 += "   \u23F1\uFE0F ".concat(step.estimated_time, " hours\n");
+                                response_5 += '\n';
+                            });
+                        }
+                        if (result.generated_assets && result.generated_assets.length > 0) {
+                            response_5 += "\uD83C\uDFA8 Generated Assets:\n";
+                            result.generated_assets.forEach(function (asset, index) {
+                                response_5 += "".concat(index + 1, ". ").concat(asset, "\n");
+                            });
+                            response_5 += '\n';
+                        }
+                        response_5 += "\uD83D\uDE80 Next Steps:\n";
+                        response_5 += "1. Review generated project structure\n";
+                        response_5 += "2. Customize assets and gameplay\n";
+                        response_5 += "3. Test core mechanics\n";
+                        response_5 += "4. Iterate and refine\n";
+                        response_5 += "5. Deploy to target platform\n\n";
+                        response_5 += "\uD83D\uDCA1 Pro Tips:\n";
+                        response_5 += "- Start with core gameplay loop\n";
+                        response_5 += "- Use version control for all changes\n";
+                        response_5 += "- Test frequently on target platform\n";
+                        response_5 += "- Get player feedback early\n";
+                        return [2 /*return*/, response_5];
+                    case 3:
+                        error_13 = _b.sent();
+                        throw new Error("Game development workflow failed: ".concat(error_13.message));
+                    case 4: return [2 /*return*/];
+                }
+            });
+        }); },
+    },
 ];
 //# sourceMappingURL=advanced_tools.js.map

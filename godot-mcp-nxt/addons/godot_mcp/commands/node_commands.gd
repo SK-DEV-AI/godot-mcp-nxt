@@ -19,6 +19,15 @@ func process_command(client_id: int, command_type: String, params: Dictionary, c
 		"list_nodes":
 			_list_nodes(client_id, params, command_id)
 			return true
+		"create_shape_resource":
+			_create_shape_resource(client_id, params, command_id)
+			return true
+		"create_mesh_resource":
+			_create_mesh_resource(client_id, params, command_id)
+			return true
+		"assign_node_resource":
+			_assign_node_resource(client_id, params, command_id)
+			return true
 	return false  # Command not handled
 
 func _create_node(client_id: int, params: Dictionary, command_id: String) -> void:
@@ -252,3 +261,202 @@ func _list_nodes(client_id: int, params: Dictionary, command_id: String) -> void
 		"parent_path": parent_path,
 		"children": children
 	}, command_id)
+
+func _create_shape_resource(client_id: int, params: Dictionary, command_id: String) -> void:
+	var shape_type = params.get("shapeType", "")
+	var parameters = params.get("parameters", {})
+
+	# Validation
+	if shape_type.is_empty():
+		return _send_error(client_id, "Shape type cannot be empty", command_id)
+
+	if not ClassDB.class_exists(shape_type):
+		return _send_error(client_id, "Invalid shape type: %s. Available types: BoxShape3D, SphereShape3D, CapsuleShape3D, etc." % shape_type, command_id)
+
+	# Create the shape resource
+	var shape
+	if ClassDB.can_instantiate(shape_type):
+		shape = ClassDB.instantiate(shape_type)
+	else:
+		return _send_error(client_id, "Cannot instantiate shape of type: %s" % shape_type, command_id)
+
+	if not shape:
+		return _send_error(client_id, "Failed to create shape of type: %s" % shape_type, command_id)
+
+	# Apply parameters based on shape type
+	match shape_type:
+		"BoxShape3D":
+			if parameters.has("size"):
+				var size = parameters.size
+				shape.size = Vector3(size.x, size.y, size.z)
+		"SphereShape3D":
+			if parameters.has("radius"):
+				shape.radius = parameters.radius
+		"CapsuleShape3D":
+			if parameters.has("radius"):
+				shape.radius = parameters.radius
+			if parameters.has("height"):
+				shape.height = parameters.height
+		"CylinderShape3D":
+			if parameters.has("radius"):
+				shape.top_radius = parameters.radius
+				shape.bottom_radius = parameters.radius
+			if parameters.has("height"):
+				shape.height = parameters.height
+		"ConvexPolygonShape3D":
+			if parameters.has("points"):
+				var points = []
+				for point in parameters.points:
+					points.append(Vector3(point.x, point.y, point.z))
+				shape.points = points
+
+	# Generate a unique resource ID
+	var resource_id = "shape_" + str(Time.get_unix_time_from_system() * 1000).replace(".", "_")
+
+	# Store the resource for later assignment
+	_store_resource(resource_id, shape)
+
+	_send_success(client_id, {
+		"resourceId": resource_id,
+		"shapeType": shape_type,
+		"parameters": parameters
+	}, command_id)
+
+func _create_mesh_resource(client_id: int, params: Dictionary, command_id: String) -> void:
+	var mesh_type = params.get("meshType", "")
+	var parameters = params.get("parameters", {})
+
+	# Validation
+	if mesh_type.is_empty():
+		return _send_error(client_id, "Mesh type cannot be empty", command_id)
+
+	if not ClassDB.class_exists(mesh_type):
+		return _send_error(client_id, "Invalid mesh type: %s. Available types: BoxMesh, SphereMesh, CapsuleMesh, etc." % mesh_type, command_id)
+
+	# Create the mesh resource
+	var mesh
+	if ClassDB.can_instantiate(mesh_type):
+		mesh = ClassDB.instantiate(mesh_type)
+	else:
+		return _send_error(client_id, "Cannot instantiate mesh of type: %s" % mesh_type, command_id)
+
+	if not mesh:
+		return _send_error(client_id, "Failed to create mesh of type: %s" % mesh_type, command_id)
+
+	# Apply parameters based on mesh type
+	match mesh_type:
+		"BoxMesh":
+			if parameters.has("size"):
+				var size = parameters.size
+				mesh.size = Vector3(size.x, size.y, size.z)
+		"SphereMesh":
+			if parameters.has("radius"):
+				mesh.radius = parameters.radius
+			if parameters.has("height"):
+				mesh.height = parameters.height
+			if parameters.has("subdivisions"):
+				var sub = parameters.subdivisions
+				mesh.radial_segments = sub.radial
+				mesh.rings = sub.rings
+		"CapsuleMesh":
+			if parameters.has("radius"):
+				mesh.radius = parameters.radius
+			if parameters.has("height"):
+				mesh.height = parameters.height
+		"CylinderMesh":
+			if parameters.has("radius"):
+				mesh.top_radius = parameters.radius
+				mesh.bottom_radius = parameters.radius
+			if parameters.has("height"):
+				mesh.height = parameters.height
+		"PlaneMesh":
+			if parameters.has("size"):
+				var size = parameters.size
+				mesh.size = Vector2(size.x, size.y)
+
+	# Generate a unique resource ID
+	var resource_id = "mesh_" + str(Time.get_unix_time_from_system() * 1000).replace(".", "_")
+
+	# Store the resource for later assignment
+	_store_resource(resource_id, mesh)
+
+	_send_success(client_id, {
+		"resourceId": resource_id,
+		"meshType": mesh_type,
+		"parameters": parameters
+	}, command_id)
+
+func _assign_node_resource(client_id: int, params: Dictionary, command_id: String) -> void:
+	var node_path = params.get("nodePath", "")
+	var resource_type = params.get("resourceType", "")
+	var resource_id = params.get("resourceId", "")
+
+	# Validation
+	if node_path.is_empty():
+		return _send_error(client_id, "Node path cannot be empty", command_id)
+
+	if resource_type.is_empty():
+		return _send_error(client_id, "Resource type cannot be empty", command_id)
+
+	if resource_id.is_empty():
+		return _send_error(client_id, "Resource ID cannot be empty", command_id)
+
+	# Get the node
+	var node = _get_editor_node(node_path)
+	if not node:
+		return _send_error(client_id, "Node not found: %s" % node_path, command_id)
+
+	# Get the stored resource
+	var resource = _get_stored_resource(resource_id)
+	if not resource:
+		return _send_error(client_id, "Resource not found: %s" % resource_id, command_id)
+
+	# Assign the resource based on type
+	var property_name = ""
+	match resource_type:
+		"shape":
+			if not node is CollisionShape3D:
+				return _send_error(client_id, "Node %s is not a CollisionShape3D - cannot assign shape" % node_path, command_id)
+			property_name = "shape"
+		"mesh":
+			if not node is MeshInstance3D:
+				return _send_error(client_id, "Node %s is not a MeshInstance3D - cannot assign mesh" % node_path, command_id)
+			property_name = "mesh"
+		_:
+			return _send_error(client_id, "Invalid resource type: %s" % resource_type, command_id)
+
+	# Use undo/redo for proper editor integration
+	var undo_redo = _get_undo_redo()
+	var old_value = node.get(property_name)
+
+	if not undo_redo:
+		# Fallback method
+		node.set(property_name, resource)
+		_mark_scene_modified()
+		print("Assigned %s resource to %s (no undo/redo available)" % [resource_type, node_path])
+	else:
+		# Use undo/redo
+		undo_redo.create_action("Assign " + resource_type.capitalize() + " Resource")
+		undo_redo.add_do_property(node, property_name, resource)
+		undo_redo.add_undo_property(node, property_name, old_value)
+		undo_redo.commit_action()
+		print("Assigned %s resource to %s with undo/redo support" % [resource_type, node_path])
+
+	# Mark the scene as modified
+	_mark_scene_modified()
+
+	_send_success(client_id, {
+		"nodePath": node_path,
+		"resourceType": resource_type,
+		"resourceId": resource_id,
+		"property": property_name
+	}, command_id)
+
+# Helper functions for resource management
+var _stored_resources = {}
+
+func _store_resource(resource_id: String, resource: Resource) -> void:
+	_stored_resources[resource_id] = resource
+
+func _get_stored_resource(resource_id: String) -> Resource:
+	return _stored_resources.get(resource_id, null)

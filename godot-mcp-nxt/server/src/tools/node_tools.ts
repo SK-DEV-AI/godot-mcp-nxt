@@ -49,15 +49,85 @@ interface NodePropertyAutomationParams {
   preview?: boolean;
 }
 
+interface CreateShapeParams {
+  shapeType: 'BoxShape3D' | 'SphereShape3D' | 'CapsuleShape3D' | 'CylinderShape3D' | 'ConvexPolygonShape3D';
+  parameters?: {
+    size?: { x: number; y: number; z: number }; // For BoxShape3D
+    radius?: number; // For SphereShape3D, CapsuleShape3D, CylinderShape3D
+    height?: number; // For CapsuleShape3D, CylinderShape3D
+    points?: Array<{ x: number; y: number; z: number }>; // For ConvexPolygonShape3D
+  };
+}
+
+interface CreateMeshParams {
+  meshType: 'BoxMesh' | 'SphereMesh' | 'CapsuleMesh' | 'CylinderMesh' | 'PlaneMesh';
+  parameters?: {
+    size?: { x: number; y: number; z: number }; // For BoxMesh
+    radius?: number; // For SphereMesh, CapsuleMesh, CylinderMesh
+    height?: number; // For CapsuleMesh, CylinderMesh
+    subdivisions?: { radial: number; rings: number }; // For SphereMesh
+  };
+}
+
+interface AssignResourceParams {
+  nodePath: string;
+  resourceType: 'shape' | 'mesh';
+  resourceId: string; // Reference to created shape/mesh
+}
+
 /**
  * Unified Node Management Tool - Consolidates all node-related operations
  */
 export const nodeTools: MCPTool[] = [
   {
     name: 'node_manager',
-    description: 'Unified tool for all node operations: create, delete, update properties, inspect, and batch operations',
+    description: `🎯 UNIFIED NODE MANAGER - Complete Godot Node Lifecycle Management
+
+USAGE WORKFLOW:
+1. 📋 PREREQUISITE: Use scene_manager to create/open a scene first
+2. ➕ CREATE: Use operation="create" with node_path="/root" (parent path, not full path)
+3. 🎨 RESOURCES: Use create_shape/create_mesh to make collision shapes and visual meshes
+4. 🔗 ASSIGN: Use assign_resource to link shapes/meshes to nodes
+5. ⚙️ MODIFY: Use update_property to change node settings
+6. 👁️ INSPECT: Use get_properties to examine current state
+7. 📊 LIST: Use list_children to see child nodes
+8. 🔄 BATCH: Use batch_update for multiple property changes
+
+COMMON PITFALLS TO AVOID:
+❌ DON'T use full node paths like "/root/TestPlayer" for creation - use "/root" as parent
+❌ DON'T try node operations without an open scene in Godot Editor
+❌ DON'T forget to specify node_type when creating nodes
+❌ DON'T use invalid property names for your node type
+❌ DON'T forget node_path for operations other than create
+❌ DON'T create CollisionShape3D/MeshInstance3D without assigning shape/mesh resources
+
+EXAMPLES:
+✅ Create player: {operation: "create", node_path: "/root", node_type: "CharacterBody3D", node_name: "Player"}
+✅ Create player with auto-resources: {operation: "create", node_path: "/root", node_type: "CharacterBody3D", node_name: "Player", autoCreateResources: true}
+✅ Create collision shape: {operation: "create_shape", shapeType: "BoxShape3D", shapeParams: {size: {x: 1, y: 1, z: 1}}}
+✅ Create visual mesh: {operation: "create_mesh", meshType: "BoxMesh", meshParams: {size: {x: 1, y: 1, z: 1}}}
+✅ Assign shape to collision: {operation: "assign_resource", node_path: "/root/Player/CollisionShape3D", resourceType: "shape", resourceId: "shape_123"}
+✅ Update position: {operation: "update_property", node_path: "/root/Player", property: "position", value: {x: 100, y: 200}}
+✅ Get properties: {operation: "get_properties", node_path: "/root/Player"}
+✅ List children: {operation: "list_children", node_path: "/root"}
+
+PREREQUISITES:
+- Scene must be open in Godot Editor (use scene_manager first)
+- Valid node paths must exist for operations
+- Node types must be valid Godot classes (Node2D, Sprite2D, CharacterBody2D, etc.)
+- Parent nodes must exist for creation operations
+- CollisionShape3D nodes require assigned Shape3D resources
+- MeshInstance3D nodes require assigned Mesh resources
+
+ERROR PREVENTION:
+- Always check scene is open before node operations
+- Use "/root" as parent path for top-level node creation
+- Verify node types exist in your Godot version
+- Test property names against Godot documentation
+- Assign shapes to CollisionShape3D nodes to prevent "A shape must be provided" errors
+- Assign meshes to MeshInstance3D nodes to prevent blank screens`,
     parameters: z.object({
-      operation: z.enum(['create', 'delete', 'update_property', 'get_properties', 'list_children', 'batch_update'])
+      operation: z.enum(['create', 'delete', 'update_property', 'get_properties', 'list_children', 'batch_update', 'create_shape', 'create_mesh', 'assign_resource'])
         .describe('Type of node operation to perform'),
       node_path: z.string().optional()
         .describe('Path to the target node (required for most operations)'),
@@ -86,6 +156,32 @@ export const nodeTools: MCPTool[] = [
         .describe('Whether to automatically determine optimal position'),
       suggestedName: z.string().optional()
         .describe('Suggested name for the node'),
+      // Shape and mesh creation options
+      shapeType: z.enum(['BoxShape3D', 'SphereShape3D', 'CapsuleShape3D', 'CylinderShape3D', 'ConvexPolygonShape3D']).optional()
+        .describe('Type of shape to create (required for create_shape)'),
+      meshType: z.enum(['BoxMesh', 'SphereMesh', 'CapsuleMesh', 'CylinderMesh', 'PlaneMesh']).optional()
+        .describe('Type of mesh to create (required for create_mesh)'),
+      shapeParams: z.object({
+        size: z.object({ x: z.number(), y: z.number(), z: z.number() }).optional(),
+        radius: z.number().optional(),
+        height: z.number().optional(),
+        points: z.array(z.object({ x: z.number(), y: z.number(), z: z.number() })).optional()
+      }).optional()
+        .describe('Parameters for shape creation'),
+      meshParams: z.object({
+        size: z.object({ x: z.number(), y: z.number(), z: z.number() }).optional(),
+        radius: z.number().optional(),
+        height: z.number().optional(),
+        subdivisions: z.object({ radial: z.number(), rings: z.number() }).optional()
+      }).optional()
+        .describe('Parameters for mesh creation'),
+      resourceType: z.enum(['shape', 'mesh']).optional()
+        .describe('Type of resource to assign (required for assign_resource)'),
+      resourceId: z.string().optional()
+        .describe('ID of resource to assign (required for assign_resource)'),
+      // Intelligent node creation with auto-resources
+      autoCreateResources: z.boolean().optional().default(false)
+        .describe('Whether to automatically create and assign basic shapes/meshes for CollisionShape3D/MeshInstance3D nodes'),
       // General options
       preview: z.boolean().optional().default(false)
         .describe('Whether to preview changes without applying them')
@@ -123,7 +219,46 @@ export const nodeTools: MCPTool[] = [
                 node_type: params.node_type,
                 node_name: params.node_name,
               });
-              return `Created ${params.node_type} node named "${params.node_name}" at ${result.node_path}`;
+
+              let response = `Created ${params.node_type} node named "${params.node_name}" at ${result.node_path}`;
+
+              // Auto-create resources for special node types
+              if (params.autoCreateResources) {
+                const nodePath = result.node_path;
+
+                if (params.node_type === 'CollisionShape3D') {
+                  // Create and assign a default BoxShape3D
+                  const shapeResult = await godot.sendCommand<CommandResult>('create_shape_resource', {
+                    shapeType: 'BoxShape3D',
+                    parameters: { size: { x: 1, y: 1, z: 1 } }
+                  });
+
+                  await godot.sendCommand<CommandResult>('assign_node_resource', {
+                    nodePath,
+                    resourceType: 'shape',
+                    resourceId: shapeResult.resourceId
+                  });
+
+                  response += `\n✅ Auto-assigned BoxShape3D (1x1x1) to prevent "A shape must be provided" errors`;
+
+                } else if (params.node_type === 'MeshInstance3D') {
+                  // Create and assign a default BoxMesh
+                  const meshResult = await godot.sendCommand<CommandResult>('create_mesh_resource', {
+                    meshType: 'BoxMesh',
+                    parameters: { size: { x: 1, y: 1, z: 1 } }
+                  });
+
+                  await godot.sendCommand<CommandResult>('assign_node_resource', {
+                    nodePath,
+                    resourceType: 'mesh',
+                    resourceId: meshResult.resourceId
+                  });
+
+                  response += `\n✅ Auto-assigned BoxMesh (1x1x1) to prevent blank screen`;
+                }
+              }
+
+              return response;
             }
           }
 
@@ -202,6 +337,46 @@ export const nodeTools: MCPTool[] = [
             }
 
             return response;
+          }
+
+          case 'create_shape': {
+            if (!params.shapeType) {
+              throw new Error('shapeType is required for create_shape operation');
+            }
+
+            const result = await godot.sendCommand<CommandResult>('create_shape_resource', {
+              shapeType: params.shapeType,
+              parameters: params.shapeParams || {}
+            });
+
+            return `Created ${params.shapeType} shape with ID: ${result.resourceId}`;
+          }
+
+          case 'create_mesh': {
+            if (!params.meshType) {
+              throw new Error('meshType is required for create_mesh operation');
+            }
+
+            const result = await godot.sendCommand<CommandResult>('create_mesh_resource', {
+              meshType: params.meshType,
+              parameters: params.meshParams || {}
+            });
+
+            return `Created ${params.meshType} mesh with ID: ${result.resourceId}`;
+          }
+
+          case 'assign_resource': {
+            if (!params.nodePath || !params.resourceType || !params.resourceId) {
+              throw new Error('nodePath, resourceType, and resourceId are required for assign_resource operation');
+            }
+
+            const result = await godot.sendCommand<CommandResult>('assign_node_resource', {
+              nodePath: params.nodePath,
+              resourceType: params.resourceType,
+              resourceId: params.resourceId
+            });
+
+            return `Assigned ${params.resourceType} resource to node at ${params.nodePath}`;
           }
 
           default:
