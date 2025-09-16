@@ -29,12 +29,14 @@ class GodotMCPErrors {
       throw new Error(`Invalid project path provided to ${toolName}: path must be a non-empty string`);
     }
 
-    if (projectPath.trim() !== projectPath) {
-      console.warn(`[${toolName}] Project path contains leading/trailing whitespace: "${projectPath}"`);
+    // Basic sanitization - remove dangerous characters
+    const sanitized = projectPath.replace(/[<>'"|\\]/g, '').trim();
+    if (sanitized !== projectPath) {
+      console.warn(`[${toolName}] Project path contained potentially dangerous characters, sanitized: "${projectPath}" -> "${sanitized}"`);
     }
 
-    if (!projectPath.includes('res://') && !projectPath.includes('.tscn') && !projectPath.includes('.gd')) {
-      console.warn(`[${toolName}] Project path doesn't contain expected Godot file extensions: ${projectPath}`);
+    if (!sanitized.includes('res://') && !sanitized.includes('.tscn') && !sanitized.includes('.gd')) {
+      console.warn(`[${toolName}] Project path doesn't contain expected Godot file extensions: ${sanitized}`);
     }
   }
 
@@ -57,12 +59,33 @@ class GodotMCPErrors {
       throw new Error(`Invalid script path provided to ${toolName}: path must be a non-empty string`);
     }
 
-    if (scriptPath.trim() !== scriptPath) {
-      console.warn(`[${toolName}] Script path contains leading/trailing whitespace: "${scriptPath}"`);
+    // Basic sanitization
+    const sanitized = scriptPath.replace(/[<>'"|\\]/g, '').trim();
+    if (sanitized !== scriptPath) {
+      console.warn(`[${toolName}] Script path contained potentially dangerous characters, sanitized: "${scriptPath}" -> "${sanitized}"`);
     }
 
-    if (!scriptPath.endsWith('.gd') && !scriptPath.startsWith('res://')) {
-      throw new Error(`Invalid script file format in ${toolName}. Expected .gd file or res:// path, got: ${scriptPath}`);
+    if (!sanitized.endsWith('.gd') && !sanitized.startsWith('res://')) {
+      throw new Error(`Invalid script file format in ${toolName}. Expected .gd file or res:// path, got: ${sanitized}`);
+    }
+  }
+
+  static validateScriptContent(content: string, toolName: string): void {
+    if (!content || typeof content !== 'string') {
+      throw new Error(`Invalid script content provided to ${toolName}: content must be a non-empty string`);
+    }
+
+    // Check file size (1MB limit)
+    if (Buffer.byteLength(content, 'utf8') > 1024 * 1024) {
+      throw new Error(`Script content too large in ${toolName}: maximum size is 1MB`);
+    }
+
+    // Basic security check - remove potentially harmful patterns
+    const dangerous = ['<script', 'javascript:', 'onload=', 'onerror='];
+    for (const pattern of dangerous) {
+      if (content.toLowerCase().includes(pattern)) {
+        console.warn(`[${toolName}] Script content contains potentially dangerous pattern: ${pattern}`);
+      }
     }
   }
 
@@ -228,18 +251,18 @@ interface NodePropertyAutomationParams {
 export const advancedTools: MCPTool[] = [
   {
     name: 'generate_complete_scripts',
-    description: 'Generate complete GDScript files from natural language descriptions',
+    description: 'Generate complete, production-ready GDScript files from natural language descriptions with proper error handling and Godot best practices',
     parameters: z.object({
       description: z.string()
-        .describe('Natural language description of the script functionality (e.g. "Create a player controller with jumping and movement")'),
+        .describe('Detailed natural language description of the script functionality (e.g. "Create a player controller with jumping, movement, and collision detection")'),
       scriptType: z.enum(['character', 'ui', 'gameplay', 'utility', 'custom']).optional()
-        .describe('Type of script to generate'),
+        .describe('Type of script to generate - affects the base class and structure'),
       complexity: z.enum(['simple', 'medium', 'complex']).optional().default('medium')
-        .describe('Complexity level of the generated script'),
+        .describe('Complexity level: simple (basic functionality), medium (balanced features), complex (advanced features)'),
       features: z.array(z.string()).optional()
-        .describe('Specific features to include in the script'),
+        .describe('Specific features to include (e.g. ["health", "inventory", "dialogue", "animation"])'),
       targetScene: z.string().optional()
-        .describe('Path to scene where the script will be used (for context)')
+        .describe('Path to scene where the script will be used (helps with context-aware code generation)')
     }),
     execute: async ({ description, scriptType, complexity = 'medium', features, targetScene }: GenerateCompleteScriptsParams): Promise<string> => {
       // Enhanced input validation
@@ -249,6 +272,11 @@ export const advancedTools: MCPTool[] = [
 
       if (targetScene) {
         GodotMCPErrors.validateScenePath(targetScene, 'generate_complete_scripts');
+      }
+
+      // Validate features array if provided
+      if (features && (!Array.isArray(features) || features.some(f => typeof f !== 'string'))) {
+        throw new Error('Features must be an array of strings');
       }
 
       const godot = getGodotConnection();
@@ -300,6 +328,9 @@ export const advancedTools: MCPTool[] = [
         .describe('Additional parameters for the refactoring operation')
     }),
     execute: async ({ scriptPath, refactoringType, parameters }: RefactorExistingCodeParams): Promise<string> => {
+      // Validate script path
+      GodotMCPErrors.validateScriptPath(scriptPath, 'refactor_existing_code');
+
       const godot = getGodotConnection();
 
       try {

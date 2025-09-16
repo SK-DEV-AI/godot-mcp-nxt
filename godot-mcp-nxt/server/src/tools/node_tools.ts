@@ -50,242 +50,165 @@ interface NodePropertyAutomationParams {
 }
 
 /**
- * Definition for node tools - operations that manipulate nodes in the scene tree
+ * Unified Node Management Tool - Consolidates all node-related operations
  */
 export const nodeTools: MCPTool[] = [
   {
-    name: 'create_node',
-    description: 'Create a new node in the Godot scene tree',
+    name: 'node_manager',
+    description: 'Unified tool for all node operations: create, delete, update properties, inspect, and batch operations',
     parameters: z.object({
-      parent_path: z.string()
-        .describe('Path to the parent node where the new node will be created (e.g. "/root", "/root/MainScene")'),
-      node_type: z.string()
-        .describe('Type of node to create (e.g. "Node2D", "Sprite2D", "Label")'),
-      node_name: z.string()
-        .describe('Name for the new node'),
-    }),
-    execute: async ({ parent_path, node_type, node_name }: CreateNodeParams): Promise<string> => {
-      const godot = getGodotConnection();
-      
-      try {
-        const result = await godot.sendCommand<CommandResult>('create_node', {
-          parent_path,
-          node_type,
-          node_name,
-        });
-        
-        return `Created ${node_type} node named "${node_name}" at ${result.node_path}`;
-      } catch (error) {
-        throw new Error(`Failed to create node: ${(error as Error).message}`);
-      }
-    },
-  },
-
-  {
-    name: 'delete_node',
-    description: 'Delete a node from the Godot scene tree',
-    parameters: z.object({
-      node_path: z.string()
-        .describe('Path to the node to delete (e.g. "/root/MainScene/Player")'),
-    }),
-    execute: async ({ node_path }: DeleteNodeParams): Promise<string> => {
-      const godot = getGodotConnection();
-      
-      try {
-        await godot.sendCommand('delete_node', { node_path });
-        return `Deleted node at ${node_path}`;
-      } catch (error) {
-        throw new Error(`Failed to delete node: ${(error as Error).message}`);
-      }
-    },
-  },
-
-  {
-    name: 'update_node_property',
-    description: 'Update a property of a node in the Godot scene tree',
-    parameters: z.object({
-      node_path: z.string()
-        .describe('Path to the node to update (e.g. "/root/MainScene/Player")'),
-      property: z.string()
-        .describe('Name of the property to update (e.g. "position", "text", "modulate")'),
-      value: z.any()
-        .describe('New value for the property'),
-    }),
-    execute: async ({ node_path, property, value }: UpdateNodePropertyParams): Promise<string> => {
-      const godot = getGodotConnection();
-      
-      try {
-        const result = await godot.sendCommand<CommandResult>('update_node_property', {
-          node_path,
-          property,
-          value,
-        });
-        
-        return `Updated property "${property}" of node at ${node_path} to ${JSON.stringify(value)}`;
-      } catch (error) {
-        throw new Error(`Failed to update node property: ${(error as Error).message}`);
-      }
-    },
-  },
-
-  {
-    name: 'get_node_properties',
-    description: 'Get all properties of a node in the Godot scene tree',
-    parameters: z.object({
-      node_path: z.string()
-        .describe('Path to the node to inspect (e.g. "/root/MainScene/Player")'),
-    }),
-    execute: async ({ node_path }: GetNodePropertiesParams): Promise<string> => {
-      const godot = getGodotConnection();
-      
-      try {
-        const result = await godot.sendCommand<CommandResult>('get_node_properties', { node_path });
-        
-        // Format properties for display
-        const formattedProperties = Object.entries(result.properties)
-          .map(([key, value]) => `${key}: ${JSON.stringify(value)}`)
-          .join('\n');
-        
-        return `Properties of node at ${node_path}:\n\n${formattedProperties}`;
-      } catch (error) {
-        throw new Error(`Failed to get node properties: ${(error as Error).message}`);
-      }
-    },
-  },
-
-  {
-    name: 'list_nodes',
-    description: 'List all child nodes under a parent node in the Godot scene tree',
-    parameters: z.object({
-      parent_path: z.string()
-        .describe('Path to the parent node (e.g. "/root", "/root/MainScene")'),
-    }),
-    execute: async ({ parent_path }: ListNodesParams): Promise<string> => {
-      const godot = getGodotConnection();
-
-      try {
-        const result = await godot.sendCommand<CommandResult>('list_nodes', { parent_path });
-
-        if (result.children.length === 0) {
-          return `No child nodes found under ${parent_path}`;
-        }
-
-        // Format children for display
-        const formattedChildren = result.children
-          .map((child: any) => `${child.name} (${child.type}) - ${child.path}`)
-          .join('\n');
-
-        return `Children of node at ${parent_path}:\n\n${formattedChildren}`;
-      } catch (error) {
-        throw new Error(`Failed to list nodes: ${(error as Error).message}`);
-      }
-    },
-  },
-
-  {
-    name: 'intelligent_node_creation',
-    description: 'Create nodes with smart positioning, naming, and context awareness',
-    parameters: z.object({
-      scenePath: z.string()
-        .describe('Path to the scene file where the node will be created'),
-      nodeType: z.string()
-        .describe('Type of node to create (e.g. "Sprite2D", "CollisionShape2D", "Area2D")'),
+      operation: z.enum(['create', 'delete', 'update_property', 'get_properties', 'list_children', 'batch_update'])
+        .describe('Type of node operation to perform'),
+      node_path: z.string().optional()
+        .describe('Path to the target node (required for most operations)'),
+      node_type: z.string().optional()
+        .describe('Type of node to create (required for create operation)'),
+      node_name: z.string().optional()
+        .describe('Name for new node (required for create operation)'),
+      property: z.string().optional()
+        .describe('Property name to update (required for update_property)'),
+      value: z.any().optional()
+        .describe('New value for property (required for update_property)'),
+      // Batch operations
+      operations: z.array(z.object({
+        nodePattern: z.string().describe('Pattern to match nodes'),
+        property: z.string().describe('Property to modify'),
+        value: z.any().describe('New value for the property'),
+        condition: z.string().optional().describe('Optional condition to filter nodes')
+      })).optional()
+        .describe('Array of property operations for batch_update'),
+      // Intelligent creation options
       context: z.string().optional()
-        .describe('Context description for intelligent placement (e.g. "player character", "background layer")'),
-      position: z.object({
-        x: z.number(),
-        y: z.number()
-      }).optional()
-        .describe('Specific position for the node (optional - will be auto-calculated if not provided)'),
+        .describe('Context description for intelligent placement'),
+      position: z.object({ x: z.number(), y: z.number() }).optional()
+        .describe('Specific position for the node'),
       autoPosition: z.boolean().optional().default(true)
         .describe('Whether to automatically determine optimal position'),
       suggestedName: z.string().optional()
-        .describe('Suggested name for the node (optional - will be auto-generated)')
-    }),
-    execute: async ({ scenePath, nodeType, context, position, autoPosition = true, suggestedName }: IntelligentNodeCreationParams): Promise<string> => {
-      const godot = getGodotConnection();
-
-      try {
-        const result = await godot.sendCommand<CommandResult>('intelligent_node_creation', {
-          scenePath,
-          nodeType,
-          context,
-          position,
-          autoPosition,
-          suggestedName
-        });
-
-        let response = `Created ${nodeType} node "${result.node_name}" at ${result.node_path}`;
-
-        if (result.position) {
-          response += `\nPosition: (${result.position.x}, ${result.position.y})`;
-        }
-
-        if (result.suggestions && result.suggestions.length > 0) {
-          response += `\n\nSuggestions:\n${result.suggestions.map((s: string) => `- ${s}`).join('\n')}`;
-        }
-
-        return response;
-      } catch (error) {
-        throw new Error(`Failed to create node intelligently: ${(error as Error).message}`);
-      }
-    },
-  },
-
-  {
-    name: 'node_property_automation',
-    description: 'Apply property changes to multiple nodes based on patterns and conditions',
-    parameters: z.object({
-      scenePath: z.string()
-        .describe('Path to the scene file to modify'),
-      operations: z.array(z.object({
-        nodePattern: z.string()
-          .describe('Pattern to match nodes (e.g. "*/Sprite*", "/root/Player", "*Enemy*")'),
-        property: z.string()
-          .describe('Property to modify (e.g. "modulate", "position", "scale")'),
-        value: z.any()
-          .describe('New value for the property'),
-        condition: z.string().optional()
-          .describe('Optional condition to filter nodes (e.g. "visible == true")')
-      }))
-        .describe('Array of property operations to perform'),
+        .describe('Suggested name for the node'),
+      // General options
       preview: z.boolean().optional().default(false)
         .describe('Whether to preview changes without applying them')
     }),
-    execute: async ({ scenePath, operations, preview = false }: NodePropertyAutomationParams): Promise<string> => {
+    execute: async (params: any): Promise<string> => {
       const godot = getGodotConnection();
 
       try {
-        const result = await godot.sendCommand<CommandResult>('node_property_automation', {
-          scenePath,
-          operations,
-          preview
-        });
-
-        let response = preview ? 'PREVIEW MODE - No changes applied\n\n' : 'Changes applied successfully\n\n';
-
-        response += `Operations performed:\n`;
-        if (result.results && Array.isArray(result.results)) {
-          result.results.forEach((opResult: any, index: number) => {
-            const operation = opResult.operation || {};
-            response += `${index + 1}. ${operation.nodePattern || 'Unknown'} -> ${operation.property || 'Unknown'} = ${JSON.stringify(operation.value)}\n`;
-            response += `   Success: ${opResult.success ? 'Yes' : 'No'}\n`;
-            if (opResult.error) {
-              response += `   Error: ${opResult.error}\n`;
+        switch (params.operation) {
+          case 'create': {
+            if (!params.node_path || !params.node_type || !params.node_name) {
+              throw new Error('node_path, node_type, and node_name are required for create operation');
             }
-            if (opResult.nodes_affected !== undefined) {
-              response += `   Affected nodes: ${opResult.nodes_affected}\n`;
+
+            // Use intelligent creation if context is provided
+            if (params.context || params.position || params.suggestedName) {
+              const result = await godot.sendCommand<CommandResult>('intelligent_node_creation', {
+                scenePath: params.node_path.split('/').slice(0, -1).join('/') || 'res://',
+                nodeType: params.node_type,
+                context: params.context,
+                position: params.position,
+                autoPosition: params.autoPosition,
+                suggestedName: params.suggestedName || params.node_name
+              });
+
+              let response = `Created ${params.node_type} node "${result.node_name}" at ${result.node_path}`;
+              if (result.position) {
+                response += `\nPosition: (${result.position.x}, ${result.position.y})`;
+              }
+              return response;
+            } else {
+              // Basic creation
+              const result = await godot.sendCommand<CommandResult>('create_node', {
+                parent_path: params.node_path,
+                node_type: params.node_type,
+                node_name: params.node_name,
+              });
+              return `Created ${params.node_type} node named "${params.node_name}" at ${result.node_path}`;
             }
-          });
-        }
+          }
 
-        if (result.warnings && result.warnings.length > 0) {
-          response += `\nWarnings:\n${result.warnings.map((w: string) => `- ${w}`).join('\n')}`;
-        }
+          case 'delete': {
+            if (!params.node_path) {
+              throw new Error('node_path is required for delete operation');
+            }
+            await godot.sendCommand('delete_node', { node_path: params.node_path });
+            return `Deleted node at ${params.node_path}`;
+          }
 
-        return response;
+          case 'update_property': {
+            if (!params.node_path || !params.property) {
+              throw new Error('node_path and property are required for update_property operation');
+            }
+            const result = await godot.sendCommand<CommandResult>('update_node_property', {
+              node_path: params.node_path,
+              property: params.property,
+              value: params.value,
+            });
+            return `Updated property "${params.property}" of node at ${params.node_path} to ${JSON.stringify(params.value)}`;
+          }
+
+          case 'get_properties': {
+            if (!params.node_path) {
+              throw new Error('node_path is required for get_properties operation');
+            }
+            const result = await godot.sendCommand<CommandResult>('get_node_properties', { node_path: params.node_path });
+            const formattedProperties = Object.entries(result.properties)
+              .map(([key, value]) => `${key}: ${JSON.stringify(value)}`)
+              .join('\n');
+            return `Properties of node at ${params.node_path}:\n\n${formattedProperties}`;
+          }
+
+          case 'list_children': {
+            if (!params.node_path) {
+              throw new Error('node_path is required for list_children operation');
+            }
+            const result = await godot.sendCommand<CommandResult>('list_nodes', { parent_path: params.node_path });
+            if (result.children.length === 0) {
+              return `No child nodes found under ${params.node_path}`;
+            }
+            const formattedChildren = result.children
+              .map((child: any) => `${child.name} (${child.type}) - ${child.path}`)
+              .join('\n');
+            return `Children of node at ${params.node_path}:\n\n${formattedChildren}`;
+          }
+
+          case 'batch_update': {
+            if (!params.operations || !Array.isArray(params.operations)) {
+              throw new Error('operations array is required for batch_update operation');
+            }
+
+            const scenePath = params.node_path ? params.node_path.split('/').slice(0, -1).join('/') || 'res://' : 'res://';
+            const result = await godot.sendCommand<CommandResult>('node_property_automation', {
+              scenePath,
+              operations: params.operations,
+              preview: params.preview
+            });
+
+            let response = params.preview ? 'PREVIEW MODE - No changes applied\n\n' : 'Batch changes applied successfully\n\n';
+            response += `Operations performed:\n`;
+
+            if (result.results && Array.isArray(result.results)) {
+              result.results.forEach((opResult: any, index: number) => {
+                const operation = opResult.operation || {};
+                response += `${index + 1}. ${operation.nodePattern || 'Unknown'} -> ${operation.property || 'Unknown'} = ${JSON.stringify(operation.value)}\n`;
+                response += `   Success: ${opResult.success ? 'Yes' : 'No'}\n`;
+                if (opResult.error) response += `   Error: ${opResult.error}\n`;
+                if (opResult.nodes_affected !== undefined) response += `   Affected nodes: ${opResult.nodes_affected}\n`;
+              });
+            }
+
+            if (result.warnings && result.warnings.length > 0) {
+              response += `\nWarnings:\n${result.warnings.map((w: string) => `- ${w}`).join('\n')}`;
+            }
+
+            return response;
+          }
+
+          default:
+            throw new Error(`Unknown operation: ${params.operation}`);
+        }
       } catch (error) {
-        throw new Error(`Failed to automate node properties: ${(error as Error).message}`);
+        throw new Error(`Node manager operation failed: ${(error as Error).message}`);
       }
     },
   },
