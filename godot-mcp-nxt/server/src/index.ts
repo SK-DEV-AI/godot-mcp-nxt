@@ -46,10 +46,32 @@ async function main() {
     version: '1.0.0',
   });
 
-  // Register all tools
-  [...nodeTools, ...scriptTools, ...sceneTools, ...editorTools, ...cliTools, ...codeAnalysisTools, ...performanceTools, ...advancedTools].forEach(tool => {
-    server.addTool(tool);
+  // Register all tools with improved organization
+  const allTools = [
+    ...nodeTools,
+    ...scriptTools,
+    ...sceneTools,
+    ...editorTools,
+    ...cliTools,
+    ...codeAnalysisTools,
+    ...performanceTools,
+    ...advancedTools
+  ];
+
+  console.error(`Registering ${allTools.length} tools...`);
+
+  allTools.forEach((tool, index) => {
+    try {
+      server.addTool(tool);
+      if (index % 10 === 0) { // Log progress every 10 tools
+        console.error(`Registered ${index + 1}/${allTools.length} tools...`);
+      }
+    } catch (error) {
+      console.error(`Failed to register tool ${tool.name}:`, error);
+    }
   });
+
+  console.error(`Successfully registered ${allTools.length} tools`);
 
   // Register static resources
   const staticResources = [

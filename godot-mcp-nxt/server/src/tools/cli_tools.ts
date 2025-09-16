@@ -131,12 +131,31 @@ const getProjectStructureAsync = getCachedProjectStructure;
 export const cliTools: MCPTool[] = [
   {
     name: 'launch_editor',
-    description: 'Launch Godot editor for a specific project',
+    description: 'Launch Godot editor for a specific project with enhanced error handling',
     parameters: z.object({
       projectPath: z.string().describe('Path to the Godot project directory'),
+      waitForReady: z.boolean().optional().default(false).describe('Wait for editor to be ready before returning'),
+      customArgs: z.array(z.string()).optional().describe('Additional command line arguments for Godot')
     }),
-    execute: async ({ projectPath }) => {
-      return await handleLaunchEditor({ projectPath });
+    execute: async ({ projectPath, waitForReady = false, customArgs = [] }) => {
+      try {
+        console.log(`[launch_editor] Launching Godot editor for project: ${projectPath}`);
+
+        if (!projectPath || typeof projectPath !== 'string') {
+          throw new Error('Project path must be a non-empty string');
+        }
+
+        const result = await handleLaunchEditor({ projectPath, waitForReady, customArgs });
+
+        if (waitForReady) {
+          return `${result}\n⏳ Editor launched and ready for use`;
+        }
+
+        return result;
+      } catch (error) {
+        console.error('[launch_editor] Failed to launch editor:', error);
+        throw new Error(`Failed to launch Godot editor: ${(error as Error).message}`);
+      }
     },
   },
   {
@@ -189,15 +208,225 @@ export const cliTools: MCPTool[] = [
       return result.content[0].text;
     },
   },
+
   {
-    name: 'get_project_info',
-    description: 'Retrieve metadata about a Godot project',
+    name: 'project_health_check',
+    description: 'Perform comprehensive health check on Godot project',
     parameters: z.object({
       projectPath: z.string().describe('Path to the Godot project directory'),
+      includeDependencies: z.boolean().optional().default(true).describe('Check for missing dependencies'),
+      includeFileIntegrity: z.boolean().optional().default(true).describe('Verify file integrity'),
+      includePerformanceMetrics: z.boolean().optional().default(false).describe('Include basic performance metrics')
     }),
-    execute: async ({ projectPath }) => {
-      const result = await handleGetProjectInfo({ projectPath });
-      return result.content[0].text;
+    execute: async ({ projectPath, includeDependencies = true, includeFileIntegrity = true, includePerformanceMetrics = false }) => {
+      try {
+        console.log(`[project_health_check] Starting health check for: ${projectPath}`);
+
+        if (!projectPath || typeof projectPath !== 'string') {
+          throw new Error('Project path must be a non-empty string');
+        }
+
+        // Check if project exists
+        const fs = await import('fs');
+        const path = await import('path');
+        const projectFile = path.join(projectPath, 'project.godot');
+
+        if (!fs.existsSync(projectFile)) {
+          throw new Error(`Not a valid Godot project: ${projectPath}`);
+        }
+
+        let healthReport = `🏥 Godot Project Health Check\n`;
+        healthReport += `Project: ${projectPath}\n\n`;
+
+        // Basic project structure check
+        const requiredFiles = ['project.godot'];
+        const recommendedFiles = ['.gitignore', 'README.md'];
+
+        healthReport += `📁 Project Structure:\n`;
+        requiredFiles.forEach(file => {
+          const exists = fs.existsSync(path.join(projectPath, file));
+          healthReport += `${exists ? '✅' : '❌'} ${file}\n`;
+        });
+
+        healthReport += `\n📋 Recommended Files:\n`;
+        recommendedFiles.forEach(file => {
+          const exists = fs.existsSync(path.join(projectPath, file));
+          healthReport += `${exists ? '✅' : '⚠️'} ${file}\n`;
+        });
+
+        // Check for common directories
+        const commonDirs = ['scenes', 'scripts', 'assets', 'addons'];
+        healthReport += `\n📂 Common Directories:\n`;
+        commonDirs.forEach(dir => {
+          const exists = fs.existsSync(path.join(projectPath, dir));
+          healthReport += `${exists ? '✅' : 'ℹ️'} ${dir}/\n`;
+        });
+
+        if (includeDependencies) {
+          healthReport += `\n🔗 Dependencies Check:\n`;
+          // This would be expanded with actual dependency checking logic
+          healthReport += `⚠️ Dependency checking not fully implemented yet\n`;
+        }
+
+        if (includeFileIntegrity) {
+          healthReport += `\n🔍 File Integrity:\n`;
+          // Basic file size and accessibility check
+          try {
+            const stats = fs.statSync(projectFile);
+            healthReport += `✅ project.godot accessible (${stats.size} bytes)\n`;
+          } catch (error) {
+            healthReport += `❌ project.godot inaccessible: ${(error as Error).message}\n`;
+          }
+        }
+
+        if (includePerformanceMetrics) {
+          healthReport += `\n⚡ Performance Metrics:\n`;
+          healthReport += `ℹ️ Performance metrics collection not implemented yet\n`;
+        }
+
+        healthReport += `\n🎯 Recommendations:\n`;
+        healthReport += `- Consider adding a .gitignore file if missing\n`;
+        healthReport += `- Create organized folder structure (scenes/, scripts/, assets/)\n`;
+        healthReport += `- Add a README.md for project documentation\n`;
+
+        return healthReport;
+
+      } catch (error) {
+        console.error('[project_health_check] Health check failed:', error);
+        throw new Error(`Project health check failed: ${(error as Error).message}`);
+      }
+    },
+  },
+
+  {
+    name: 'quick_setup',
+    description: 'Quick setup wizard for new Godot projects with MCP integration',
+    parameters: z.object({
+      projectPath: z.string().describe('Path where to create the new project'),
+      projectName: z.string().describe('Name of the new project'),
+      template: z.enum(['2d', '3d', 'empty']).optional().default('2d').describe('Project template to use'),
+      includeDemo: z.boolean().optional().default(true).describe('Include demo scene and script')
+    }),
+    execute: async ({ projectPath, projectName, template = '2d', includeDemo = true }) => {
+      try {
+        console.log(`[quick_setup] Setting up new Godot project: ${projectName}`);
+
+        if (!projectPath || !projectName) {
+          throw new Error('Both project path and name are required');
+        }
+
+        const fs = await import('fs');
+        const path = await import('path');
+
+        // Create project directory
+        const fullProjectPath = path.join(projectPath, projectName);
+        if (fs.existsSync(fullProjectPath)) {
+          throw new Error(`Directory already exists: ${fullProjectPath}`);
+        }
+
+        fs.mkdirSync(fullProjectPath, { recursive: true });
+
+        // Create basic project structure
+        const dirs = ['scenes', 'scripts', 'assets'];
+        dirs.forEach(dir => {
+          fs.mkdirSync(path.join(fullProjectPath, dir), { recursive: true });
+        });
+
+        // Create project.godot
+        const projectGodot = `[application]
+config/name="${projectName}"
+config/description=""
+run/main_scene="res://scenes/main.tscn"
+config/features=PackedStringArray("4.2")
+
+[display]
+window/size/viewport_width=1920
+window/size/viewport_height=1080
+
+[rendering]
+renderer/rendering_method="gl_compatibility"
+`;
+
+        fs.writeFileSync(path.join(fullProjectPath, 'project.godot'), projectGodot);
+
+        // Create main scene if requested
+        if (includeDemo) {
+          const mainScene = `[gd_scene load_steps=2 format=3 uid="uid://b8q8q8q8q8q8q8q8q8q8q"]
+
+[ext_resource type="Script" path="res://scripts/main.gd" id="1"]
+
+[node name="Main" type="Node2D"]
+script = ExtResource("1")
+
+[node name="Camera2D" type="Camera2D" parent="."]
+`;
+
+          fs.writeFileSync(path.join(fullProjectPath, 'scenes', 'main.tscn'), mainScene);
+
+          // Create main script
+          const mainScript = `extends Node2D
+
+func _ready():
+    print("Hello from ${projectName}!")
+    print("MCP integration ready!")
+
+func _process(delta):
+    # Add your game logic here
+    pass
+`;
+
+          fs.writeFileSync(path.join(fullProjectPath, 'scripts', 'main.gd'), mainScript);
+        }
+
+        // Create .gitignore
+        const gitignore = `# Godot files
+.import/
+export_presets.cfg
+.mono/
+
+# Logs
+*.log
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# IDE files
+.vscode/
+.idea/
+`;
+
+        fs.writeFileSync(path.join(fullProjectPath, '.gitignore'), gitignore);
+
+        let setupReport = `🚀 Quick Setup Complete!\n\n`;
+        setupReport += `Project: ${projectName}\n`;
+        setupReport += `Location: ${fullProjectPath}\n\n`;
+
+        setupReport += `📁 Created directories:\n`;
+        dirs.forEach(dir => {
+          setupReport += `- ${dir}/\n`;
+        });
+
+        setupReport += `\n📄 Created files:\n`;
+        setupReport += `- project.godot\n`;
+        setupReport += `- .gitignore\n`;
+
+        if (includeDemo) {
+          setupReport += `- scenes/main.tscn\n`;
+          setupReport += `- scripts/main.gd\n`;
+        }
+
+        setupReport += `\n🎮 Next steps:\n`;
+        setupReport += `1. Open the project in Godot Editor\n`;
+        setupReport += `2. Enable the MCP addon in Project Settings\n`;
+        setupReport += `3. Start developing your game!\n`;
+
+        return setupReport;
+
+      } catch (error) {
+        console.error('[quick_setup] Setup failed:', error);
+        throw new Error(`Quick setup failed: ${(error as Error).message}`);
+      }
     },
   },
 ];
@@ -217,8 +446,6 @@ export async function handleCliTool(name: string, args: any) {
         return await handleGetGodotVersion();
       case 'list_projects':
         return await handleListProjects(args);
-      case 'get_project_info':
-        return await handleGetProjectInfo(args);
       default:
         throw new Error(`Unknown CLI tool: ${name}`);
     }
@@ -362,46 +589,4 @@ async function handleListProjects(args: any) {
   };
 }
 
-async function handleGetProjectInfo(args: any) {
-  if (!args.projectPath) {
-    throw new Error('Project path is required');
-  }
-
-  await detectGodotPath();
-  if (!godotPath) {
-    throw new Error('Could not find a valid Godot executable path');
-  }
-
-  const projectFile = join(args.projectPath, 'project.godot');
-  if (!existsSync(projectFile)) {
-    throw new Error(`Not a valid Godot project: ${args.projectPath}`);
-  }
-
-  const { stdout } = await execAsync(`"${godotPath}" --version`);
-  const projectStructure = await getProjectStructureAsync(args.projectPath);
-
-  let projectName = basename(args.projectPath);
-  try {
-    const fs = await import('fs');
-    const projectFileContent = fs.readFileSync(projectFile, 'utf8');
-    const configNameMatch = projectFileContent.match(/config\/name="([^"]+)"/);
-    if (configNameMatch && configNameMatch[1]) {
-      projectName = configNameMatch[1];
-    }
-  } catch (error) {
-    // Continue with default project name
-  }
-
-  return {
-    content: [{
-      type: 'text',
-      text: JSON.stringify({
-        name: projectName,
-        path: args.projectPath,
-        godotVersion: stdout.trim(),
-        structure: projectStructure,
-      }, null, 2)
-    }]
-  };
-}
 

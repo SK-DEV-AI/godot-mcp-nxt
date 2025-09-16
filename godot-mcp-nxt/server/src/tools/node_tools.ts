@@ -215,7 +215,7 @@ export const nodeTools: MCPTool[] = [
           suggestedName
         });
 
-        let response = `Created ${nodeType} node "${result.nodeName}" at ${result.nodePath}`;
+        let response = `Created ${nodeType} node "${result.node_name}" at ${result.node_path}`;
 
         if (result.position) {
           response += `\nPosition: (${result.position.x}, ${result.position.y})`;
@@ -265,13 +265,19 @@ export const nodeTools: MCPTool[] = [
         let response = preview ? 'PREVIEW MODE - No changes applied\n\n' : 'Changes applied successfully\n\n';
 
         response += `Operations performed:\n`;
-        result.operations.forEach((op: any, index: number) => {
-          response += `${index + 1}. ${op.nodePattern} -> ${op.property} = ${JSON.stringify(op.value)}\n`;
-          response += `   Affected nodes: ${op.affectedCount}\n`;
-          if (op.affectedNodes && op.affectedNodes.length > 0) {
-            response += `   Nodes: ${op.affectedNodes.join(', ')}\n`;
-          }
-        });
+        if (result.results && Array.isArray(result.results)) {
+          result.results.forEach((opResult: any, index: number) => {
+            const operation = opResult.operation || {};
+            response += `${index + 1}. ${operation.nodePattern || 'Unknown'} -> ${operation.property || 'Unknown'} = ${JSON.stringify(operation.value)}\n`;
+            response += `   Success: ${opResult.success ? 'Yes' : 'No'}\n`;
+            if (opResult.error) {
+              response += `   Error: ${opResult.error}\n`;
+            }
+            if (opResult.nodes_affected !== undefined) {
+              response += `   Affected nodes: ${opResult.nodes_affected}\n`;
+            }
+          });
+        }
 
         if (result.warnings && result.warnings.length > 0) {
           response += `\nWarnings:\n${result.warnings.map((w: string) => `- ${w}`).join('\n')}`;

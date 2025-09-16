@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "description": "Godot MCP Server using FastMCP",
   "type": "module",
-  "main": "dist/index.js",
+  "main": "server/dist/index.js",
   "scripts": {
     "build": "tsc",
     "start": "node dist/index.js",

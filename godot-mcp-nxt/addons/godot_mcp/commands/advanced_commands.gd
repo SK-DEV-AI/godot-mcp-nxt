@@ -43,6 +43,15 @@ func process_command(client_id: int, command_type: String, params: Dictionary, c
 		"apply_smart_suggestion":
 			_apply_smart_suggestion(client_id, params, command_id)
 			return true
+		"validate_project_structure":
+			_validate_project_structure(client_id, params, command_id)
+			return true
+		"intelligent_node_creation":
+			_intelligent_node_creation(client_id, params, command_id)
+			return true
+		"node_property_automation":
+			_node_property_automation(client_id, params, command_id)
+			return true
 	return false  # Command not handled
 
 func _generate_complete_scripts(client_id: int, params: Dictionary, command_id: String) -> void:
@@ -65,8 +74,13 @@ func _generate_complete_scripts(client_id: int, params: Dictionary, command_id: 
 
 	# Ensure scripts directory exists
 	var dir = DirAccess.open("res://")
-	if not dir.dir_exists("scripts"):
-		dir.make_dir("scripts")
+	if dir:
+		if not dir.dir_exists("scripts"):
+			var err = dir.make_dir("scripts")
+			if err != OK:
+				return _send_error(client_id, "Failed to create scripts directory", command_id)
+	else:
+		return _send_error(client_id, "Failed to access res:// directory", command_id)
 
 	# Write script file
 	var file = FileAccess.open(script_path, FileAccess.WRITE)
@@ -88,7 +102,11 @@ func _generate_complete_scripts(client_id: int, params: Dictionary, command_id: 
 			"content": script_content
 		}, command_id)
 	else:
-		_send_error(client_id, "Failed to create script file", command_id)
+		var error_msg = "Failed to create script file at: " + script_path
+		var error_code = FileAccess.get_open_error()
+		if error_code != OK:
+			error_msg += " (Error: " + str(error_code) + ")"
+		_send_error(client_id, error_msg, command_id)
 
 func _create_character_system(client_id: int, params: Dictionary, command_id: String) -> void:
 	var character_type = params.get("characterType", "player")
@@ -382,6 +400,8 @@ func _generate_script_content(script_type: String, complexity: String, features:
 			content = _generate_ui_script_content(complexity, features)
 		"gameplay":
 			content = _generate_gameplay_script_content(complexity, features)
+		_:
+			content = "# Default script content for type: " + script_type + "\nextends Node\n\nfunc _ready():\n\tpass\n\nfunc _process(delta):\n\tpass\n"
 
 	return content
 
@@ -452,13 +472,54 @@ func _generate_gameplay_script_content(complexity: String, features: Array) -> S
 
 func _generate_script_name(script_type: String, description: String) -> String:
 	var base_name = script_type + "_script"
+
 	if description.length() > 0:
 		# Extract meaningful words from description
 		var words = description.split(" ", false)
 		if words.size() > 0:
-			base_name = words[0].to_lower()
+			# Skip articles and get the first meaningful word
+			var meaningful_word = ""
+			for word in words:
+				var clean_word = word.strip_edges().to_lower()
+				if clean_word not in ["a", "an", "the", "and", "or", "but", "with", "for", "to", "in", "on", "at"]:
+					meaningful_word = clean_word
+					break
+
+			if meaningful_word.length() > 0:
+				# Clean the word to be a valid identifier
+				var valid_chars = "abcdefghijklmnopqrstuvwxyz0123456789_"
+				var cleaned = ""
+				for c in meaningful_word:
+					if c in valid_chars:
+						cleaned += c
+				if cleaned.length() > 0:
+					base_name = cleaned
+
 		if words.size() > 1:
-			base_name += "_" + words[1].to_lower()
+			# Get second meaningful word
+			var second_meaningful = ""
+			var found_first = false
+			for word in words:
+				var clean_word = word.strip_edges().to_lower()
+				if clean_word not in ["a", "an", "the", "and", "or", "but", "with", "for", "to", "in", "on", "at"]:
+					if not found_first:
+						found_first = true
+					else:
+						second_meaningful = clean_word
+						break
+
+			if second_meaningful.length() > 0:
+				var cleaned_second = ""
+				var valid_chars = "abcdefghijklmnopqrstuvwxyz0123456789_"
+				for c in second_meaningful:
+					if c in valid_chars:
+						cleaned_second += c
+				if cleaned_second.length() > 0:
+					base_name += "_" + cleaned_second
+
+	# Ensure the name is not empty and is valid
+	if base_name.is_empty() or base_name == "_":
+		base_name = script_type + "_script"
 
 	return base_name
 
@@ -764,3 +825,385 @@ func _apply_suggestions(suggestions: Array, target: String) -> Array:
 			applied.append(suggestion.description + " - applied")
 
 	return applied
+
+func _intelligent_node_creation(client_id: int, params: Dictionary, command_id: String) -> void:
+	var scene_path = params.get("scenePath", "")
+	var node_type = params.get("nodeType", "Node2D")
+	var context = params.get("context", "")
+	var position = params.get("position", null)
+	var auto_position = params.get("autoPosition", true)
+	var suggested_name = params.get("suggestedName", "")
+
+	# Validation
+	if scene_path.is_empty():
+		return _send_error(client_id, "Scene path cannot be empty", command_id)
+
+	if not scene_path.begins_with("res://"):
+		scene_path = "res://" + scene_path
+
+	# Generate intelligent node name based on context
+	var node_name = suggested_name
+	if node_name.is_empty():
+		if "player" in context.to_lower():
+			node_name = "Player" + node_type.replace("2D", "").replace("3D", "")
+		elif "enemy" in context.to_lower():
+			node_name = "Enemy" + node_type.replace("2D", "").replace("3D", "")
+		elif "background" in context.to_lower():
+			node_name = "Background" + node_type.replace("2D", "").replace("3D", "")
+		else:
+			node_name = "Smart" + node_type.replace("2D", "").replace("3D", "")
+
+	# Get the scene root node using proper Godot scene access
+	var scene_root = null
+	var editor_interface = Engine.get_meta("GodotMCPPlugin").get_editor_interface()
+	if editor_interface:
+		var edited_scene_root = editor_interface.get_edited_scene_root()
+		if edited_scene_root:
+			# Find the root node of the current scene
+			while edited_scene_root.get_parent():
+				edited_scene_root = edited_scene_root.get_parent()
+			scene_root = edited_scene_root
+
+	if not scene_root:
+		return _send_error(client_id, "No scene is currently being edited", command_id)
+
+	# Create the node using proper Godot instantiation
+	var new_node = null
+	if ClassDB.class_exists(node_type):
+		new_node = ClassDB.instantiate(node_type)
+	else:
+		return _send_error(client_id, "Invalid node type: %s" % node_type, command_id)
+
+	if not new_node:
+		return _send_error(client_id, "Failed to create node of type: %s" % node_type, command_id)
+
+	# Set node properties
+	new_node.name = node_name
+
+	# Set position if provided or auto-position
+	if position and position.has("x") and position.has("y"):
+		if new_node is Node2D:
+			new_node.position = Vector2(position.x, position.y)
+		elif new_node is Node3D:
+			new_node.position = Vector3(position.x, position.y, 0)
+		elif new_node is Control:
+			new_node.position = Vector2(position.x, position.y)
+	elif auto_position:
+		# Auto-position based on context
+		if new_node is Node2D:
+			if "background" in context.to_lower():
+				new_node.position = Vector2(0, 0)
+			else:
+				new_node.position = Vector2(100, 100)
+		elif new_node is Node3D:
+			new_node.position = Vector3(0, 0, 0)
+
+	# Add to scene with proper ownership
+	scene_root.add_child(new_node)
+	new_node.owner = scene_root
+
+	# Mark scene as modified
+	if editor_interface:
+		editor_interface.mark_scene_as_unsaved()
+
+	_send_success(client_id, {
+		"node_path": scene_root.get_path().get_concatenated_names() + "/" + node_name,
+		"node_type": node_type,
+		"node_name": node_name,
+		"context": context,
+		"position": position if position else {"x": new_node.position.x if new_node is Node2D else 0, "y": new_node.position.y if new_node is Node2D else 0}
+	}, command_id)
+
+func _node_property_automation(client_id: int, params: Dictionary, command_id: String) -> void:
+	var scene_path = params.get("scenePath", "")
+	var operations = params.get("operations", [])
+	var preview = params.get("preview", false)
+
+	# Validation
+	if scene_path.is_empty():
+		return _send_error(client_id, "Scene path cannot be empty", command_id)
+
+	if operations.is_empty():
+		return _send_error(client_id, "Operations cannot be empty", command_id)
+
+	var results = []
+	var applied_changes = 0
+
+	# Get the scene root using proper Godot scene access
+	var scene_root = null
+	var editor_interface = Engine.get_meta("GodotMCPPlugin").get_editor_interface()
+	if editor_interface:
+		var edited_scene_root = editor_interface.get_edited_scene_root()
+		if edited_scene_root:
+			# Find the root node of the current scene
+			while edited_scene_root.get_parent():
+				edited_scene_root = edited_scene_root.get_parent()
+			scene_root = edited_scene_root
+
+	if not scene_root:
+		return _send_error(client_id, "No scene is currently being edited", command_id)
+
+	# Process each operation
+	for operation in operations:
+		var node_pattern = operation.get("nodePattern", "")
+		var property = operation.get("property", "")
+		var value = operation.get("value")
+		var condition = operation.get("condition", "")
+
+		if node_pattern.is_empty() or property.is_empty():
+			results.append({
+				"operation": operation,
+				"success": false,
+				"error": "Missing nodePattern or property"
+			})
+			continue
+
+		# Find nodes matching the pattern
+		var matching_nodes = _find_nodes_by_pattern(scene_root, node_pattern)
+
+		if matching_nodes.is_empty():
+			results.append({
+				"operation": operation,
+				"success": false,
+				"error": "No nodes found matching pattern: %s" % node_pattern
+			})
+			continue
+
+		# Apply property to matching nodes
+		var operation_results = []
+		for node in matching_nodes:
+			# Check condition if provided
+			if not condition.is_empty():
+				if not _evaluate_condition(node, condition):
+					continue
+
+			# Apply property change
+			var old_value = null
+			if not preview:
+				# Get current value safely using Godot's property system
+				if node.get(property) != null:
+					old_value = node.get(property)
+
+				# Set new value using proper Godot property system
+				var parsed_value = _parse_property_value(value, node, property)
+				if parsed_value != null:
+					node.set(property, parsed_value)
+					applied_changes += 1
+
+			operation_results.append({
+				"node_path": str(node.get_path()),
+				"node_name": node.name,
+				"property": property,
+				"old_value": old_value if not preview else null,
+				"new_value": value
+			})
+
+		results.append({
+			"operation": operation,
+			"success": true,
+			"nodes_affected": operation_results.size(),
+			"results": operation_results
+		})
+
+	# Mark scene as modified if changes were applied
+	if not preview and applied_changes > 0 and editor_interface:
+		editor_interface.mark_scene_as_unsaved()
+
+	_send_success(client_id, {
+		"scene_path": scene_path,
+		"operations_processed": operations.size(),
+		"total_changes": applied_changes,
+		"preview_mode": preview,
+		"results": results
+	}, command_id)
+
+
+func _evaluate_condition(node: Node, condition: String) -> bool:
+	# Simple condition evaluation (can be enhanced)
+	if "visible == true" in condition:
+		return node.visible
+	elif "visible == false" in condition:
+		return not node.visible
+
+	# Default to true if condition is not recognized
+	return true
+
+func _parse_property_value(value, node: Node = null, property: String = "") -> Variant:
+	# Parse value based on property type and expected format
+	if value is Dictionary:
+		# Handle Vector2, Vector3, Color, etc.
+		if value.has("x") and value.has("y"):
+			if value.has("z"):
+				return Vector3(value.x, value.y, value.z)
+			else:
+				return Vector2(value.x, value.y)
+		elif value.has("r") and value.has("g") and value.has("b"):
+			var a = value.get("a", 1.0)
+			return Color(value.r, value.g, value.b, a)
+
+	# For other types, return as-is
+	return value
+
+func _find_nodes_by_pattern(root: Node, pattern: String) -> Array:
+	var matching_nodes = []
+
+	# Simple pattern matching (can be enhanced)
+	if pattern == "*" or pattern == "/*":
+		matching_nodes.append(root)
+	elif pattern.begins_with("*/"):
+		var node_name_pattern = pattern.substr(2)
+		matching_nodes = _find_nodes_by_name(root, node_name_pattern)
+	else:
+		# Try to find by exact path
+		var node = root.get_node_or_null(pattern)
+		if node:
+			matching_nodes.append(node)
+
+	return matching_nodes
+
+func _find_nodes_by_name(root: Node, name_pattern: String) -> Array:
+	var matching_nodes = []
+
+	# Recursively search for nodes with names containing the pattern
+	_search_nodes_recursive(root, name_pattern, matching_nodes)
+	return matching_nodes
+
+func _search_nodes_recursive(node: Node, name_pattern: String, matching_nodes: Array) -> void:
+	if name_pattern in node.name:
+		matching_nodes.append(node)
+
+	for child in node.get_children():
+		_search_nodes_recursive(child, name_pattern, matching_nodes)
+
+func _validate_project_structure(client_id: int, params: Dictionary, command_id: String) -> void:
+	var project_path = params.get("projectPath", "")
+	var check_scripts = params.get("checkScripts", true)
+	var check_scenes = params.get("checkScenes", true)
+	var check_resources = params.get("checkResources", true)
+	var fix_issues = params.get("fixIssues", false)
+
+	# Validation
+	if project_path.is_empty():
+		return _send_error(client_id, "Project path cannot be empty", command_id)
+
+	# Convert to res:// path if needed
+	if not project_path.begins_with("res://"):
+		project_path = "res://" + project_path.trim_prefix("res://")
+
+	var issues = []
+	var statistics = {
+		"total_files": 0,
+		"total_directories": 0,
+		"script_files": 0,
+		"scene_files": 0,
+		"resource_files": 0
+	}
+
+	# Check project structure
+	var dir = DirAccess.open("res://")
+	if not dir:
+		return _send_error(client_id, "Cannot access project directory", command_id)
+
+	# Check for required files
+	var required_files = ["project.godot"]
+	for file_name in required_files:
+		if not dir.file_exists(file_name):
+			issues.append({
+				"severity": "error",
+				"message": "Missing required file: " + file_name,
+				"file": file_name
+			})
+
+	# Check for recommended files
+	var recommended_files = [".gitignore", "README.md", "LICENSE"]
+	for file_name in recommended_files:
+		if not dir.file_exists(file_name):
+			issues.append({
+				"severity": "warning",
+				"message": "Recommended file missing: " + file_name,
+				"file": file_name,
+				"suggestion": "Consider adding a " + file_name + " file to your project"
+			})
+
+	# Check directory structure
+	var common_dirs = ["scenes", "scripts", "assets", "addons"]
+	for dir_name in common_dirs:
+		if not dir.dir_exists(dir_name):
+			issues.append({
+				"severity": "info",
+				"message": "Common directory missing: " + dir_name + "/",
+				"suggestion": "Consider creating a " + dir_name + "/ directory for better organization"
+			})
+
+	# Analyze files if requested
+	if check_scripts or check_scenes or check_resources:
+		var all_files = _find_files("res://", ["*"])
+		statistics.total_files = all_files.size()
+
+		for file_path in all_files:
+			var file_name = file_path.get_file()
+
+			if check_scripts and file_name.ends_with(".gd"):
+				statistics.script_files += 1
+				# Basic script validation
+				var script_content = _read_file_content(file_path)
+				if script_content:
+					if script_content.find("extends ") == -1:
+						issues.append({
+							"severity": "warning",
+							"message": "Script may be missing extends declaration",
+							"file": file_path,
+							"suggestion": "Add 'extends' declaration to define base class"
+						})
+
+			elif check_scenes and file_name.ends_with(".tscn"):
+				statistics.scene_files += 1
+
+			elif check_resources and (file_name.ends_with(".tres") or file_name.ends_with(".res")):
+				statistics.resource_files += 1
+
+	# Count directories
+	var all_dirs = _find_directories("res://")
+	statistics.total_directories = all_dirs.size()
+
+	# Auto-fix issues if requested
+	var fixed_issues = []
+	if fix_issues:
+		for issue in issues:
+			if issue.severity == "info" and issue.message.contains("directory missing"):
+				var dir_name = issue.message.split(": ")[1].trim_suffix("/")
+				var create_dir = DirAccess.open("res://")
+				if create_dir and create_dir.make_dir(dir_name) == OK:
+					fixed_issues.append("Created directory: " + dir_name + "/")
+					issues.erase(issue)  # Remove from issues list
+
+	_send_success(client_id, {
+		"project_path": project_path,
+		"issues": issues,
+		"statistics": statistics,
+		"fixed_issues": fixed_issues if fix_issues else []
+	}, command_id)
+
+func _read_file_content(file_path: String) -> String:
+	var file = FileAccess.open(file_path, FileAccess.READ)
+	if file:
+		var content = file.get_as_text()
+		file.close()
+		return content
+	return ""
+
+func _find_directories(base_path: String) -> Array:
+	var directories = []
+	var dir = DirAccess.open(base_path)
+
+	if dir:
+		dir.list_dir_begin()
+		var item_name = dir.get_next()
+
+		while item_name != "":
+			if dir.current_is_dir() and not item_name.begins_with("."):
+				directories.append(base_path + item_name + "/")
+				directories.append_array(_find_directories(base_path + item_name + "/"))
+			item_name = dir.get_next()
+
+	return directories

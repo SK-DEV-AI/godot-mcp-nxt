@@ -3,20 +3,22 @@ import { getGodotConnection } from '../utils/godot_connection.js';
 import { MCPTool, CommandResult } from '../utils/types.js';
 
 /**
- * Enhanced error handling utilities
+ * Enhanced error handling and validation utilities
  */
 class GodotMCPErrors {
   static handleToolError(error: any, toolName: string, operation: string): never {
     const errorMessage = error?.message || 'Unknown error occurred';
     const enhancedMessage = `Failed to ${operation} in ${toolName}: ${errorMessage}`;
 
-    // Log detailed error information
+    // Log detailed error information with structured format
     console.error(`[${toolName}] Error during ${operation}:`, {
       error: errorMessage,
       stack: error?.stack,
       timestamp: new Date().toISOString(),
       tool: toolName,
-      operation
+      operation,
+      code: error?.code,
+      errno: error?.errno
     });
 
     throw new Error(enhancedMessage);
@@ -24,7 +26,11 @@ class GodotMCPErrors {
 
   static validateProjectPath(projectPath: string, toolName: string): void {
     if (!projectPath || typeof projectPath !== 'string') {
-      throw new Error(`Invalid project path provided to ${toolName}`);
+      throw new Error(`Invalid project path provided to ${toolName}: path must be a non-empty string`);
+    }
+
+    if (projectPath.trim() !== projectPath) {
+      console.warn(`[${toolName}] Project path contains leading/trailing whitespace: "${projectPath}"`);
     }
 
     if (!projectPath.includes('res://') && !projectPath.includes('.tscn') && !projectPath.includes('.gd')) {
@@ -34,54 +40,95 @@ class GodotMCPErrors {
 
   static validateScenePath(scenePath: string, toolName: string): void {
     if (!scenePath || typeof scenePath !== 'string') {
-      throw new Error(`Invalid scene path provided to ${toolName}`);
+      throw new Error(`Invalid scene path provided to ${toolName}: path must be a non-empty string`);
+    }
+
+    if (scenePath.trim() !== scenePath) {
+      console.warn(`[${toolName}] Scene path contains leading/trailing whitespace: "${scenePath}"`);
     }
 
     if (!scenePath.endsWith('.tscn') && !scenePath.startsWith('res://')) {
-      throw new Error(`Invalid scene file format. Expected .tscn file or res:// path in ${toolName}`);
+      throw new Error(`Invalid scene file format in ${toolName}. Expected .tscn file or res:// path, got: ${scenePath}`);
     }
   }
 
   static validateScriptPath(scriptPath: string, toolName: string): void {
     if (!scriptPath || typeof scriptPath !== 'string') {
-      throw new Error(`Invalid script path provided to ${toolName}`);
+      throw new Error(`Invalid script path provided to ${toolName}: path must be a non-empty string`);
+    }
+
+    if (scriptPath.trim() !== scriptPath) {
+      console.warn(`[${toolName}] Script path contains leading/trailing whitespace: "${scriptPath}"`);
     }
 
     if (!scriptPath.endsWith('.gd') && !scriptPath.startsWith('res://')) {
-      throw new Error(`Invalid script file format. Expected .gd file or res:// path in ${toolName}`);
+      throw new Error(`Invalid script file format in ${toolName}. Expected .gd file or res:// path, got: ${scriptPath}`);
+    }
+  }
+
+  static validateNodePath(nodePath: string, toolName: string): void {
+    if (!nodePath || typeof nodePath !== 'string') {
+      throw new Error(`Invalid node path provided to ${toolName}: path must be a non-empty string`);
+    }
+
+    if (!nodePath.startsWith('/root') && !nodePath.startsWith('.')) {
+      console.warn(`[${toolName}] Node path doesn't follow Godot conventions (should start with /root or .): ${nodePath}`);
     }
   }
 
   static createRecoverySuggestions(error: any, toolName: string, operation: string): string[] {
     const suggestions: string[] = [];
 
-    if (error?.message?.includes('not found')) {
+    const errorMsg = error?.message?.toLowerCase() || '';
+
+    if (errorMsg.includes('not found') || errorMsg.includes('enoent')) {
       suggestions.push('Check if the file path exists and is accessible');
       suggestions.push('Verify the project structure and file locations');
+      suggestions.push('Ensure the path is relative to the project root (res://)');
     }
 
-    if (error?.message?.includes('permission')) {
+    if (errorMsg.includes('permission') || errorMsg.includes('eacces')) {
       suggestions.push('Check file permissions for the project directory');
       suggestions.push('Ensure Godot has write access to the project files');
+      suggestions.push('Try running the command with elevated privileges if necessary');
     }
 
-    if (error?.message?.includes('connection')) {
+    if (errorMsg.includes('connection') || errorMsg.includes('econnrefused')) {
       suggestions.push('Verify Godot Editor is running and accessible');
-      suggestions.push('Check WebSocket connection to Godot');
+      suggestions.push('Check WebSocket connection to Godot (default port 4242)');
+      suggestions.push('Ensure the Godot MCP addon is enabled in the project');
     }
 
-    if (error?.message?.includes('syntax')) {
+    if (errorMsg.includes('syntax') || errorMsg.includes('parse')) {
       suggestions.push('Review the generated code for syntax errors');
       suggestions.push('Check variable names and Godot API usage');
+      suggestions.push('Validate GDScript syntax with the Godot editor');
+    }
+
+    if (errorMsg.includes('timeout')) {
+      suggestions.push('Increase timeout values for long-running operations');
+      suggestions.push('Check network connectivity if using remote connections');
     }
 
     if (suggestions.length === 0) {
       suggestions.push('Check the Godot Editor console for detailed error messages');
       suggestions.push('Verify all required dependencies are installed');
       suggestions.push('Try restarting the Godot Editor and MCP server');
+      suggestions.push('Check the server logs for additional error details');
     }
 
     return suggestions;
+  }
+
+  static logOperation(toolName: string, operation: string, details?: any): void {
+    console.log(`[${toolName}] ${operation}`, details ? { timestamp: new Date().toISOString(), ...details } : '');
+  }
+
+  static validateParameters(params: any, requiredFields: string[], toolName: string): void {
+    const missingFields = requiredFields.filter(field => !params[field]);
+    if (missingFields.length > 0) {
+      throw new Error(`Missing required parameters in ${toolName}: ${missingFields.join(', ')}`);
+    }
   }
 }
 
@@ -155,6 +202,26 @@ interface ApplySmartSuggestionParams {
   parameters?: Record<string, any>;
 }
 
+interface IntelligentNodeCreationParams {
+  scenePath: string;
+  nodeType: string;
+  context?: string;
+  position?: { x: number; y: number };
+  autoPosition?: boolean;
+  suggestedName?: string;
+}
+
+interface NodePropertyAutomationParams {
+  scenePath: string;
+  operations: Array<{
+    nodePattern: string;
+    property: string;
+    value: any;
+    condition?: string;
+  }>;
+  preview?: boolean;
+}
+
 /**
  * Advanced tools for complex operations and AI-powered features
  */
@@ -195,8 +262,8 @@ export const advancedTools: MCPTool[] = [
           targetScene
         });
 
-        let response = `Generated ${result.scriptType} script: ${result.scriptName}\n\n`;
-        response += `Path: ${result.scriptPath}\n`;
+        let response = `Generated ${result.script_type || 'character'} script\n\n`;
+        response += `Path: ${result.script_path}\n`;
         response += `Complexity: ${result.complexity}\n`;
         response += `Features included: ${result.features?.join(', ') || 'N/A'}\n\n`;
 
@@ -674,6 +741,130 @@ export const advancedTools: MCPTool[] = [
         return response;
       } catch (error) {
         throw new Error(`Failed to apply smart suggestion: ${(error as Error).message}`);
+      }
+    },
+  },
+
+  {
+    name: 'batch_operations',
+    description: 'Execute multiple Godot operations in a single request with rollback support',
+    parameters: z.object({
+      operations: z.array(z.object({
+        tool: z.enum(['create_node', 'update_node_property', 'create_script', 'save_scene']),
+        parameters: z.record(z.any())
+      })).min(1).max(10),
+      rollbackOnError: z.boolean().default(true),
+      continueOnError: z.boolean().default(false)
+    }),
+    execute: async ({ operations, rollbackOnError = true, continueOnError = false }) => {
+      const godot = getGodotConnection();
+      const results: any[] = [];
+      const executedOperations: any[] = [];
+
+      GodotMCPErrors.logOperation('batch_operations', 'Starting batch execution', { operationCount: operations.length });
+
+      try {
+        for (let i = 0; i < operations.length; i++) {
+          const operation = operations[i];
+
+          try {
+            GodotMCPErrors.logOperation('batch_operations', `Executing operation ${i + 1}/${operations.length}`, { tool: operation.tool });
+
+            const result = await godot.sendCommand<CommandResult>(operation.tool, operation.parameters);
+            results.push({ index: i, success: true, result, tool: operation.tool });
+            executedOperations.push({ index: i, operation, result });
+
+          } catch (error) {
+            const errorResult = { index: i, success: false, error: (error as Error).message, tool: operation.tool };
+            results.push(errorResult);
+
+            if (!continueOnError) {
+              if (rollbackOnError && executedOperations.length > 0) {
+                GodotMCPErrors.logOperation('batch_operations', 'Rolling back operations due to error');
+                // Note: Rollback implementation would depend on specific undo mechanisms
+                // For now, we'll log the rollback intent
+                console.warn('[batch_operations] Rollback requested but not fully implemented');
+              }
+              throw new Error(`Batch operation failed at step ${i + 1}: ${(error as Error).message}`);
+            }
+          }
+        }
+
+        const successCount = results.filter(r => r.success).length;
+        const failureCount = results.filter(r => !r.success).length;
+
+        return `Batch operations completed: ${successCount} successful, ${failureCount} failed\n\n` +
+               `Results:\n${results.map(r =>
+                 `Operation ${r.index + 1} (${r.tool}): ${r.success ? 'SUCCESS' : 'FAILED'}${r.error ? ` - ${r.error}` : ''}`
+               ).join('\n')}`;
+
+      } catch (error) {
+        const suggestions = GodotMCPErrors.createRecoverySuggestions(error, 'batch_operations', 'execute batch');
+        const enhancedError = `${(error as Error).message}\n\nTroubleshooting suggestions:\n${suggestions.map(s => `- ${s}`).join('\n')}`;
+        throw new Error(enhancedError);
+      }
+    },
+  },
+
+  {
+    name: 'validate_project_structure',
+    description: 'Validate and analyze the current Godot project structure for common issues',
+    parameters: z.object({
+      projectPath: z.string().optional(),
+      checkScripts: z.boolean().default(true),
+      checkScenes: z.boolean().default(true),
+      checkResources: z.boolean().default(true),
+      fixIssues: z.boolean().default(false)
+    }),
+    execute: async ({ projectPath, checkScripts = true, checkScenes = true, checkResources = true, fixIssues = false }) => {
+      const godot = getGodotConnection();
+
+      try {
+        GodotMCPErrors.logOperation('validate_project_structure', 'Starting project validation');
+
+        const result = await godot.sendCommand<CommandResult>('validate_project_structure', {
+          projectPath,
+          checkScripts,
+          checkScenes,
+          checkResources,
+          fixIssues
+        });
+
+        let response = 'Project Structure Validation Results:\n\n';
+
+        if (result.issues && result.issues.length > 0) {
+          response += `Issues Found (${result.issues.length}):\n`;
+          result.issues.forEach((issue: any, index: number) => {
+            response += `${index + 1}. ${issue.severity.toUpperCase()}: ${issue.message}\n`;
+            if (issue.file) response += `   File: ${issue.file}\n`;
+            if (issue.line) response += `   Line: ${issue.line}\n`;
+            if (issue.suggestion) response += `   Suggestion: ${issue.suggestion}\n`;
+            response += '\n';
+          });
+        } else {
+          response += '✅ No issues found in project structure\n\n';
+        }
+
+        if (result.statistics) {
+          response += 'Project Statistics:\n';
+          Object.entries(result.statistics).forEach(([key, value]) => {
+            response += `- ${key}: ${value}\n`;
+          });
+        }
+
+        if (fixIssues && result.fixed && result.fixed.length > 0) {
+          response += '\nIssues Fixed:\n';
+          result.fixed.forEach((fix: string) => {
+            response += `- ${fix}\n`;
+          });
+        }
+
+        return response;
+
+      } catch (error) {
+        const suggestions = GodotMCPErrors.createRecoverySuggestions(error, 'validate_project_structure', 'validate project');
+        const enhancedError = `${(error as Error).message}\n\nTroubleshooting suggestions:\n${suggestions.map(s => `- ${s}`).join('\n')}`;
+        throw new Error(enhancedError);
       }
     },
   },

@@ -25,7 +25,7 @@ func _initialize_command_processors():
 	var project_commands = MCPProjectCommands.new()
 	var editor_commands = MCPEditorCommands.new()
 	var editor_script_commands = MCPEditorScriptCommands.new()  # Add our new processor
-	var advanced_commands = load("res://addons/godot_mcp/commands/advanced_commands.gd").new()  # Add advanced commands processor
+	var advanced_commands = MCPAdvancedCommands.new()  # Add advanced commands processor
 
 	# Set server reference for all processors
 	node_commands._websocket_server = _websocket_server
