@@ -1,386 +1,382 @@
 import { z } from 'zod';
-import { MCPTool } from '../utils/types.js';
 import { getGodotConnection } from '../utils/godot_connection.js';
-import { compressJsonResponse } from '../utils/compression.js';
+import { MCPTool, CommandResult } from '../utils/types.js';
 
 /**
- * Tool for analyzing scene performance metrics
+ * Performance monitoring and analysis tools for Godot MCP server
  */
-export const analyzeScenePerformanceTool: MCPTool = {
-  name: 'analyze_scene_performance',
-  description: 'Analyze Godot scene performance including node count, draw calls, and potential optimizations',
-  parameters: z.object({
-    scene_path: z.string().describe('Path to the scene file to analyze'),
-    include_detailed_breakdown: z.boolean().optional().default(false).describe('Include detailed node-by-node performance breakdown'),
-  }),
-  annotations: {
-    streamingHint: true,
-  },
-  execute: async (args: any, context?: { reportProgress?: any; streamContent?: any }) => {
-    const { scene_path, include_detailed_breakdown } = args;
-    const { reportProgress, streamContent } = context || {};
-    const godot = getGodotConnection();
-
-    try {
-      if (streamContent) {
-        await streamContent({ type: 'text', text: `Starting performance analysis for scene: ${scene_path}\n` });
-      }
-
-      if (reportProgress) {
-        await reportProgress({ progress: 10, total: 100 });
-      }
-
-      // Get scene structure
-      const sceneResult = await godot.sendCommand('get_scene_structure', {
-        path: scene_path
-      });
-
-      if (streamContent) {
-        await streamContent({ type: 'text', text: 'Retrieved scene structure, analyzing nodes...\n' });
-      }
-
-      if (reportProgress) {
-        await reportProgress({ progress: 30, total: 100 });
-      }
-
-      // Analyze performance metrics
-      const analysis = analyzeScenePerformance(sceneResult, include_detailed_breakdown);
-
-      if (streamContent) {
-        await streamContent({ type: 'text', text: 'Performance analysis complete.\n' });
-      }
-
-      if (reportProgress) {
-        await reportProgress({ progress: 100, total: 100 });
-      }
-
-      // Compress large analysis results
-      const { data: compressedAnalysis } = await compressJsonResponse(analysis, {
-        minSize: 2048, // Compress if larger than 2KB
-        algorithm: 'gzip'
-      });
-
-      return {
-        content: [
-          {
-            type: 'text',
-            text: `Performance analysis completed for ${scene_path}\n\nAnalysis Results:\n${JSON.stringify(compressedAnalysis, null, 2)}`
-          }
-        ]
-      };
-    } catch (error) {
-      console.error('Error analyzing scene performance:', error);
-      throw error;
-    }
-  }
-};
-
-/**
- * Tool for analyzing script performance
- */
-export const analyzeScriptPerformanceTool: MCPTool = {
-  name: 'analyze_script_performance',
-  description: 'Analyze GDScript performance including function complexity, potential bottlenecks, and optimization suggestions',
-  parameters: z.object({
-    script_path: z.string().describe('Path to the script file to analyze'),
-    include_complexity_analysis: z.boolean().optional().default(true).describe('Include cyclomatic complexity analysis'),
-  }),
-  execute: async ({ script_path, include_complexity_analysis }) => {
-    const godot = getGodotConnection();
-
-    try {
-      // Get script content
-      const scriptResult = await godot.sendCommand('get_script', {
-        script_path: script_path
-      });
-
-      if (!scriptResult?.content) {
-        throw new Error(`Script not found: ${script_path}`);
-      }
-
-      const analysis = analyzeScriptPerformance(scriptResult.content, script_path, include_complexity_analysis);
-
-      return {
-        content: [
-          {
-            type: 'text',
-            text: `Script performance analysis completed for ${script_path}\n\nAnalysis Results:\n${JSON.stringify(analysis, null, 2)}`
-          }
-        ]
-      };
-    } catch (error) {
-      console.error('Error analyzing script performance:', error);
-      throw error;
-    }
-  }
-};
-
-/**
- * Tool for getting real-time performance metrics
- */
-export const getRealtimePerformanceMetricsTool: MCPTool = {
-  name: 'get_realtime_performance_metrics',
-  description: 'Get current Godot engine performance metrics (FPS, memory usage, draw calls, etc.)',
-  parameters: z.object({
-    include_system_info: z.boolean().optional().default(false).describe('Include system information and hardware details'),
-  }),
-  execute: async ({ include_system_info }) => {
-    const godot = getGodotConnection();
-
-    try {
-      const metricsResult = await godot.sendCommand('get_performance_metrics', {
-        include_system_info
-      });
-
-      const metrics = {
-        timestamp: new Date().toISOString(),
-        fps: metricsResult.fps || 0,
-        frame_time: metricsResult.frame_time || 0,
-        memory_usage: metricsResult.memory_usage || 0,
-        draw_calls: metricsResult.draw_calls || 0,
-        objects_drawn: metricsResult.objects_drawn || 0,
-        vertices_drawn: metricsResult.vertices_drawn || 0,
-        system_info: include_system_info ? metricsResult.system_info : undefined
-      };
-
-      return {
-        content: [
-          {
-            type: 'text',
-            text: `Current performance metrics - FPS: ${metrics.fps}, Memory: ${Math.round(metrics.memory_usage / 1024 / 1024)}MB, Draw Calls: ${metrics.draw_calls}\n\nDetailed Metrics:\n${JSON.stringify(metrics, null, 2)}`
-          }
-        ]
-      };
-    } catch (error) {
-      console.error('Error getting performance metrics:', error);
-      throw error;
-    }
-  }
-};
-
-// Helper functions for performance analysis
-
-function analyzeScenePerformance(sceneData: any, detailed: boolean) {
-  const analysis = {
-    scene_path: sceneData.scene_path || 'unknown',
-    total_nodes: 0,
-    performance_score: 0,
-    issues: [] as any[],
-    recommendations: [] as any[],
-    breakdown: detailed ? [] as any[] : undefined
-  };
-
-  // Handle different response formats
-  var sceneNodes;
-  if (sceneData.nodes) {
-    sceneNodes = sceneData.nodes;
-  } else if (sceneData.structure) {
-    sceneNodes = sceneData.structure;
-  } else {
-    analysis.issues.push({
-      type: 'error',
-      message: 'No scene data available for analysis'
-    });
-    return analysis;
-  }
-
-  // Analyze nodes recursively
-  function analyzeNode(node: any, depth = 0): any {
-    analysis.total_nodes++;
-
-    const nodeAnalysis = {
-      name: node.name,
-      type: node.type,
-      depth,
-      issues: [] as string[],
-      score: 100
-    };
-
-    // Check for performance issues
-    if (node.type === 'Sprite2D' && !node.texture) {
-      nodeAnalysis.issues.push('Sprite2D without texture');
-      nodeAnalysis.score -= 20;
-    }
-
-    if (node.type === 'RigidBody2D' && node.children?.length > 10) {
-      nodeAnalysis.issues.push('RigidBody2D with many children - consider optimization');
-      nodeAnalysis.score -= 15;
-    }
-
-    if (node.type === 'AnimationPlayer' && node.animations?.length > 20) {
-      nodeAnalysis.issues.push('Many animations - consider splitting into multiple players');
-      nodeAnalysis.score -= 10;
-    }
-
-    // Analyze children
-    if (node.children) {
-      for (const child of node.children) {
-        const childAnalysis = analyzeNode(child, depth + 1);
-        nodeAnalysis.score = Math.min(nodeAnalysis.score, childAnalysis.score);
-      }
-    }
-
-    if (detailed && nodeAnalysis.issues.length > 0) {
-      analysis.breakdown!.push(nodeAnalysis);
-    }
-
-    return nodeAnalysis;
-  }
-
-  const rootAnalysis = analyzeNode(sceneNodes);
-  analysis.performance_score = rootAnalysis.score;
-
-  // Generate recommendations
-  if (analysis.total_nodes > 1000) {
-    analysis.recommendations.push({
-      priority: 'high',
-      message: 'Scene has many nodes - consider scene instancing or optimization'
-    });
-  }
-
-  if (analysis.performance_score < 70) {
-    analysis.recommendations.push({
-      priority: 'medium',
-      message: 'Performance score is low - review node structure and remove unnecessary elements'
-    });
-  }
-
-  return analysis;
-}
-
-function analyzeScriptPerformance(content: string, filePath: string, includeComplexity: boolean) {
-  const lines = content.split('\n');
-
-  const analysis = {
-    script_path: filePath,
-    total_lines: lines.length,
-    functions: [] as any[],
-    complexity_score: 0,
-    issues: [] as any[],
-    recommendations: [] as any[]
-  };
-
-  let currentFunction: any = null;
-  let braceDepth = 0;
-
-  for (let i = 0; i < lines.length; i++) {
-    const line = lines[i].trim();
-    const originalLine = lines[i];
-
-    // Function detection
-    const funcMatch = line.match(/^func\s+(\w+)\s*\(/);
-    if (funcMatch) {
-      if (currentFunction) {
-        // Finalize previous function
-        currentFunction.end_line = i;
-        currentFunction.complexity = calculateFunctionComplexity(currentFunction.lines);
-        analysis.functions.push(currentFunction);
-      }
-
-      currentFunction = {
-        name: funcMatch[1],
-        start_line: i + 1,
-        lines: [] as string[],
-        complexity: 0
-      };
-    }
-
-    // Track braces for function boundaries
-    const openBraces = (line.match(/\{/g) || []).length;
-    const closeBraces = (line.match(/\}/g) || []).length;
-    braceDepth += openBraces - closeBraces;
-
-    if (currentFunction && braceDepth > 0) {
-      currentFunction.lines.push(originalLine);
-    }
-
-    // End of function
-    if (currentFunction && braceDepth === 0 && currentFunction.lines.length > 0) {
-      currentFunction.end_line = i + 1;
-      currentFunction.complexity = calculateFunctionComplexity(currentFunction.lines);
-      analysis.functions.push(currentFunction);
-      currentFunction = null;
-    }
-
-    // Check for performance issues
-    if (line.includes('get_node(') && line.includes('../')) {
-      analysis.issues.push({
-        line: i + 1,
-        type: 'warning',
-        message: 'Deep node path lookup - consider caching node reference'
-      });
-    }
-
-    if (line.includes('find_node(') || line.includes('get_node(')) {
-      analysis.issues.push({
-        line: i + 1,
-        type: 'info',
-        message: 'Node lookup in _process or _physics_process - consider caching'
-      });
-    }
-  }
-
-  // Finalize last function
-  if (currentFunction) {
-    currentFunction.complexity = calculateFunctionComplexity(currentFunction.lines);
-    analysis.functions.push(currentFunction);
-  }
-
-  // Calculate overall complexity
-  if (includeComplexity) {
-    analysis.complexity_score = analysis.functions.reduce((sum, func) => sum + func.complexity, 0);
-  }
-
-  // Generate recommendations
-  const highComplexityFunctions = analysis.functions.filter(f => f.complexity > 10);
-  if (highComplexityFunctions.length > 0) {
-    analysis.recommendations.push({
-      priority: 'high',
-      message: `Functions with high complexity: ${highComplexityFunctions.map(f => f.name).join(', ')} - consider refactoring`
-    });
-  }
-
-  if (analysis.issues.filter(i => i.type === 'warning').length > 5) {
-    analysis.recommendations.push({
-      priority: 'medium',
-      message: 'Many performance warnings - review node access patterns'
-    });
-  }
-
-  return analysis;
-}
-
-function calculateFunctionComplexity(lines: string[]): number {
-  let complexity = 1; // Base complexity
-
-  for (const line of lines) {
-    const trimmed = line.trim();
-
-    // Control structures increase complexity
-    if (trimmed.startsWith('if ') || trimmed.startsWith('elif ')) {
-      complexity++;
-    }
-
-    if (trimmed.startsWith('for ') || trimmed.startsWith('while ')) {
-      complexity++;
-    }
-
-    if (trimmed.includes(' and ') || trimmed.includes(' or ')) {
-      complexity++;
-    }
-
-    // Nested conditions (simple heuristic)
-    const indentLevel = line.length - line.trimStart().length;
-    if (indentLevel > 8 && (trimmed.startsWith('if ') || trimmed.startsWith('for ') || trimmed.startsWith('while '))) {
-      complexity++;
-    }
-  }
-
-  return complexity;
-}
-
 export const performanceTools: MCPTool[] = [
-  analyzeScenePerformanceTool,
-  analyzeScriptPerformanceTool,
-  getRealtimePerformanceMetricsTool
+  {
+    name: 'performance_monitor',
+    description: `🎯 PERFORMANCE MONITOR - Real-time Godot Engine Performance Analysis
+
+USAGE WORKFLOW:
+1. 📊 GET_METRICS: Use operation="get_metrics" to retrieve current performance data
+2. 📈 ANALYZE: Use operation="analyze_performance" for detailed analysis and recommendations
+3. ⚠️ ALERTS: Use operation="set_alerts" to configure performance thresholds
+4. 📊 HISTORY: Use operation="get_history" to review performance trends
+5. 🔧 OPTIMIZE: Use operation="optimize_suggestions" for performance improvement recommendations
+
+COMMON PERFORMANCE ISSUES TO MONITOR:
+❌ LOW FPS (< 30): Indicates rendering or physics bottlenecks
+❌ HIGH MEMORY (> 500MB): Potential memory leaks or large scenes
+❌ PHYSICS SPIKES: Excessive collision calculations
+❌ RENDER OBJECTS: Too many objects in frame
+
+EXAMPLES:
+✅ Get current metrics: {operation: "get_metrics"}
+✅ Analyze performance: {operation: "analyze_performance", include_history: true}
+✅ Set FPS alert: {operation: "set_alerts", fps_threshold: 30.0}
+✅ Get performance history: {operation: "get_history", hours: 1}
+✅ Get optimization suggestions: {operation: "optimize_suggestions"}
+
+PERFORMANCE METRICS TRACKED:
+- FPS (Frames Per Second)
+- Frame Time (Processing time per frame)
+- Memory Usage (Static + Dynamic)
+- Physics Processing Time
+- Render Objects Count
+- Scene Complexity
+- Active Node Count
+
+ALERT THRESHOLDS (CONFIGURABLE):
+- FPS: < 30 (default)
+- Memory: > 500MB (default)
+- Physics Time: > 16ms (default)
+
+PERFORMANCE ANALYSIS FEATURES:
+- Trend analysis over time
+- Bottleneck identification
+- Optimization recommendations
+- Memory leak detection
+- Scene complexity assessment`,
+    parameters: z.object({
+      operation: z.enum(['get_metrics', 'analyze_performance', 'set_alerts', 'get_history', 'optimize_suggestions'])
+        .describe('Type of performance operation to perform'),
+      // Analysis options
+      include_history: z.boolean().optional().default(false)
+        .describe('Include historical performance data in analysis'),
+      detailed_analysis: z.boolean().optional().default(false)
+        .describe('Perform detailed performance analysis with recommendations'),
+      // Alert configuration
+      fps_threshold: z.number().optional()
+        .describe('FPS threshold for alerts (default: 30)'),
+      memory_threshold: z.number().optional()
+        .describe('Memory usage threshold in MB for alerts (default: 500)'),
+      physics_threshold: z.number().optional()
+        .describe('Physics processing time threshold in ms for alerts (default: 16)'),
+      // History options
+      hours: z.number().optional().default(1)
+        .describe('Number of hours of history to retrieve'),
+      // Optimization options
+      focus_area: z.enum(['rendering', 'physics', 'memory', 'scene', 'all']).optional().default('all')
+        .describe('Specific area to focus optimization suggestions on')
+    }),
+    execute: async (params: any): Promise<string> => {
+      const godot = getGodotConnection();
+
+      try {
+        switch (params.operation) {
+          case 'get_metrics': {
+            const result = await godot.sendCommand<CommandResult>('get_performance_metrics', {});
+            return formatPerformanceMetrics(result.metrics);
+          }
+
+          case 'analyze_performance': {
+            const result = await godot.sendCommand<CommandResult>('analyze_performance', {
+              include_history: params.include_history,
+              detailed: params.detailed_analysis
+            });
+            return formatPerformanceAnalysis(result.analysis);
+          }
+
+          case 'set_alerts': {
+            const thresholds = {
+              fps: params.fps_threshold || 30.0,
+              memory_mb: params.memory_threshold || 500.0,
+              physics_ms: params.physics_threshold || 16.0
+            };
+
+            const result = await godot.sendCommand<CommandResult>('set_performance_alerts', {
+              thresholds
+            });
+
+            return `Performance alerts configured:\n${formatAlertThresholds(thresholds)}`;
+          }
+
+          case 'get_history': {
+            const result = await godot.sendCommand<CommandResult>('get_performance_history', {
+              hours: params.hours
+            });
+            return formatPerformanceHistory(result.history);
+          }
+
+          case 'optimize_suggestions': {
+            const result = await godot.sendCommand<CommandResult>('get_optimization_suggestions', {
+              focus_area: params.focus_area
+            });
+            return formatOptimizationSuggestions(result.suggestions);
+          }
+
+          default:
+            throw new Error(`Unknown operation: ${params.operation}`);
+        }
+      } catch (error) {
+        throw new Error(`Performance monitor operation failed: ${(error as Error).message}`);
+      }
+    },
+  },
+
+  {
+    name: 'performance_profiler',
+    description: `🔬 PERFORMANCE PROFILER - Advanced Godot Performance Profiling
+
+PROFILING WORKFLOW:
+1. 🎯 START: Use operation="start_profiling" to begin performance capture
+2. 📊 CAPTURE: Let the profiler run during performance-critical operations
+3. 🛑 STOP: Use operation="stop_profiling" to end capture and get results
+4. 📈 ANALYZE: Use operation="analyze_profile" for detailed bottleneck analysis
+
+PROFILING FEATURES:
+- Frame-by-frame performance breakdown
+- Function call timing analysis
+- Memory allocation tracking
+- Physics simulation profiling
+- Rendering pipeline analysis
+
+PROFILING MODES:
+- realtime: Continuous profiling with minimal overhead
+- detailed: Comprehensive analysis with higher overhead
+- memory: Focus on memory allocations and leaks
+- physics: Detailed physics simulation analysis
+
+EXAMPLES:
+✅ Start profiling: {operation: "start_profiling", mode: "realtime"}
+✅ Stop and analyze: {operation: "stop_profiling", include_analysis: true}
+✅ Memory profiling: {operation: "start_profiling", mode: "memory"}
+✅ Physics analysis: {operation: "analyze_profile", focus: "physics"}`,
+    parameters: z.object({
+      operation: z.enum(['start_profiling', 'stop_profiling', 'analyze_profile', 'get_profile_status'])
+        .describe('Type of profiling operation to perform'),
+      mode: z.enum(['realtime', 'detailed', 'memory', 'physics']).optional().default('realtime')
+        .describe('Profiling mode to use'),
+      duration: z.number().optional()
+        .describe('Duration in seconds for profiling (0 = manual stop)'),
+      include_analysis: z.boolean().optional().default(true)
+        .describe('Include automatic analysis when stopping profiling'),
+      focus: z.enum(['rendering', 'physics', 'memory', 'script', 'all']).optional().default('all')
+        .describe('Specific area to focus analysis on')
+    }),
+    execute: async (params: any): Promise<string> => {
+      const godot = getGodotConnection();
+
+      try {
+        switch (params.operation) {
+          case 'start_profiling': {
+            const result = await godot.sendCommand<CommandResult>('start_performance_profiling', {
+              mode: params.mode,
+              duration: params.duration || 0
+            });
+            return `Performance profiling started in ${params.mode} mode\nProfile ID: ${result.profile_id}`;
+          }
+
+          case 'stop_profiling': {
+            const result = await godot.sendCommand<CommandResult>('stop_performance_profiling', {
+              include_analysis: params.include_analysis
+            });
+            return formatProfilingResults(result.profile_data);
+          }
+
+          case 'analyze_profile': {
+            const result = await godot.sendCommand<CommandResult>('analyze_performance_profile', {
+              focus: params.focus
+            });
+            return formatProfileAnalysis(result.analysis);
+          }
+
+          case 'get_profile_status': {
+            const result = await godot.sendCommand<CommandResult>('get_profiling_status', {});
+            return formatProfileStatus(result.status);
+          }
+
+          default:
+            throw new Error(`Unknown profiling operation: ${params.operation}`);
+        }
+      } catch (error) {
+        throw new Error(`Performance profiler operation failed: ${(error as Error).message}`);
+      }
+    },
+  }
 ];
+
+/**
+ * Helper functions for formatting performance data
+ */
+function formatPerformanceMetrics(metrics: any): string {
+  let output = "📊 **Current Performance Metrics**\n\n";
+
+  output += `🎮 **Rendering**\n`;
+  output += `  • FPS: ${metrics.fps?.toFixed(1) || 'N/A'}\n`;
+  output += `  • Frame Time: ${metrics.frame_time?.toFixed(2) || 'N/A'} ms\n`;
+  output += `  • Render Objects: ${metrics.render_objects || 'N/A'}\n\n`;
+
+  output += `⚡ **Physics**\n`;
+  output += `  • Physics Time: ${metrics.physics_time?.toFixed(2) || 'N/A'} ms\n`;
+  output += `  • Active Objects: ${metrics.physics_2d_active || 0} (2D) + ${metrics.physics_3d_active || 0} (3D)\n\n`;
+
+  output += `💾 **Memory**\n`;
+  output += `  • Total Usage: ${metrics.memory_total?.toFixed(1) || 'N/A'} MB\n`;
+  output += `  • Static: ${metrics.memory_static?.toFixed(1) || 'N/A'} MB\n`;
+  output += `  • Dynamic: ${metrics.memory_dynamic?.toFixed(1) || 'N/A'} MB\n\n`;
+
+  output += `🌳 **Scene**\n`;
+  output += `  • Complexity: ${metrics.scene_complexity || 'N/A'}\n`;
+  output += `  • Active Nodes: ${metrics.active_nodes || 'N/A'}\n`;
+
+  return output;
+}
+
+function formatPerformanceAnalysis(analysis: any): string {
+  let output = "🔍 **Performance Analysis Report**\n\n";
+
+  if (analysis.bottlenecks && analysis.bottlenecks.length > 0) {
+    output += "🚨 **Bottlenecks Detected**\n";
+    analysis.bottlenecks.forEach((bottleneck: any, index: number) => {
+      output += `${index + 1}. ${bottleneck.description}\n`;
+      output += `   Impact: ${bottleneck.impact}\n`;
+      output += `   Recommendation: ${bottleneck.recommendation}\n\n`;
+    });
+  }
+
+  if (analysis.recommendations && analysis.recommendations.length > 0) {
+    output += "💡 **Optimization Recommendations**\n";
+    analysis.recommendations.forEach((rec: any, index: number) => {
+      output += `${index + 1}. ${rec.description}\n`;
+      output += `   Expected Impact: ${rec.expected_impact}\n\n`;
+    });
+  }
+
+  if (analysis.trends) {
+    output += "📈 **Performance Trends**\n";
+    Object.entries(analysis.trends).forEach(([metric, trend]: [string, any]) => {
+      output += `  • ${metric}: ${trend.direction} (${trend.change_percent?.toFixed(1) || 'N/A'}%)\n`;
+    });
+  }
+
+  return output;
+}
+
+function formatAlertThresholds(thresholds: any): string {
+  return Object.entries(thresholds)
+    .map(([metric, value]) => `  • ${metric}: ${value}`)
+    .join('\n');
+}
+
+function formatPerformanceHistory(history: any[]): string {
+  if (!history || history.length === 0) {
+    return "📊 No performance history available";
+  }
+
+  let output = "📈 **Performance History**\n\n";
+  output += "| Time | FPS | Memory | Physics |\n";
+  output += "|------|-----|--------|--------|\n";
+
+  history.slice(-20).forEach(entry => { // Show last 20 entries
+    const timestamp = new Date(entry.timestamp * 1000).toLocaleTimeString();
+    output += `| ${timestamp} | ${entry.metrics.fps?.toFixed(1) || 'N/A'} | ${entry.metrics.memory_total?.toFixed(1) || 'N/A'}MB | ${entry.metrics.physics_time?.toFixed(2) || 'N/A'}ms |\n`;
+  });
+
+  return output;
+}
+
+function formatOptimizationSuggestions(suggestions: any[]): string {
+  if (!suggestions || suggestions.length === 0) {
+    return "✅ No optimization suggestions available - performance looks good!";
+  }
+
+  let output = "🚀 **Optimization Suggestions**\n\n";
+
+  suggestions.forEach((suggestion, index) => {
+    output += `${index + 1}. **${suggestion.title}**\n`;
+    output += `   ${suggestion.description}\n`;
+    output += `   **Impact:** ${suggestion.impact}\n`;
+    output += `   **Difficulty:** ${suggestion.difficulty}\n\n`;
+
+    if (suggestion.steps && suggestion.steps.length > 0) {
+      output += `   **Steps:**\n`;
+      suggestion.steps.forEach((step: string, stepIndex: number) => {
+        output += `   ${stepIndex + 1}. ${step}\n`;
+      });
+      output += "\n";
+    }
+  });
+
+  return output;
+}
+
+function formatProfilingResults(profileData: any): string {
+  let output = "🔬 **Profiling Results**\n\n";
+
+  output += `**Profile Duration:** ${profileData.duration?.toFixed(2) || 'N/A'} seconds\n`;
+  output += `**Total Frames:** ${profileData.total_frames || 'N/A'}\n`;
+  output += `**Average FPS:** ${profileData.average_fps?.toFixed(1) || 'N/A'}\n\n`;
+
+  if (profileData.frame_times && profileData.frame_times.length > 0) {
+    output += "**Frame Time Analysis**\n";
+    output += `  • Average: ${profileData.frame_times_avg?.toFixed(2) || 'N/A'} ms\n`;
+    output += `  • Min: ${profileData.frame_times_min?.toFixed(2) || 'N/A'} ms\n`;
+    output += `  • Max: ${profileData.frame_times_max?.toFixed(2) || 'N/A'} ms\n`;
+    output += `  • 95th Percentile: ${profileData.frame_times_95p?.toFixed(2) || 'N/A'} ms\n\n`;
+  }
+
+  if (profileData.bottlenecks && profileData.bottlenecks.length > 0) {
+    output += "**Top Bottlenecks**\n";
+    profileData.bottlenecks.slice(0, 5).forEach((bottleneck: any, index: number) => {
+      output += `${index + 1}. ${bottleneck.function || 'Unknown'} (${bottleneck.time?.toFixed(2) || 'N/A'} ms)\n`;
+    });
+  }
+
+  return output;
+}
+
+function formatProfileAnalysis(analysis: any): string {
+  let output = "📊 **Profile Analysis**\n\n";
+
+  if (analysis.hotspots && analysis.hotspots.length > 0) {
+    output += "**Performance Hotspots**\n";
+    analysis.hotspots.forEach((hotspot: any, index: number) => {
+      output += `${index + 1}. ${hotspot.name}\n`;
+      output += `   Time: ${hotspot.total_time?.toFixed(2) || 'N/A'} ms\n`;
+      output += `   Calls: ${hotspot.call_count || 'N/A'}\n`;
+      output += `   Avg Time: ${hotspot.avg_time?.toFixed(2) || 'N/A'} ms\n\n`;
+    });
+  }
+
+  if (analysis.recommendations && analysis.recommendations.length > 0) {
+    output += "**Optimization Recommendations**\n";
+    analysis.recommendations.forEach((rec: any, index: number) => {
+      output += `${index + 1}. ${rec.description}\n`;
+    });
+  }
+
+  return output;
+}
+
+function formatProfileStatus(status: any): string {
+  let output = "📊 **Profiling Status**\n\n";
+
+  output += `**Status:** ${status.is_profiling ? 'Active' : 'Inactive'}\n`;
+
+  if (status.is_profiling) {
+    output += `**Mode:** ${status.mode || 'Unknown'}\n`;
+    output += `**Duration:** ${status.elapsed_time?.toFixed(2) || 'N/A'} seconds\n`;
+    output += `**Frames Captured:** ${status.frames_captured || 0}\n`;
+  }
+
+  if (status.last_profile) {
+    output += `**Last Profile:** ${status.last_profile.duration?.toFixed(2) || 'N/A'} seconds\n`;
+    output += `**Average FPS:** ${status.last_profile.average_fps?.toFixed(1) || 'N/A'}\n`;
+  }
+
+  return output;
+}

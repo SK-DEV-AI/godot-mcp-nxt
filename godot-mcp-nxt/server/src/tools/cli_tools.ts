@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { MCPTool } from '../utils/types.js';
+import { MCPTool, ToolResult } from '../utils/types.js';
 import { fileURLToPath } from 'url';
 import { join, dirname, normalize, basename } from 'path';
 import { readdirSync, existsSync } from 'fs';
@@ -216,19 +216,20 @@ ERROR PREVENTION:
               customArgs: params.customArgs
             });
             if (params.waitForReady) {
-              return `${result}\n⏳ Editor launched and ready for use`;
+              return `${result.content[0].text}\n⏳ Editor launched and ready for use`;
             }
-            return result;
+            return result.content[0].text;
           }
 
           case 'run_project': {
             if (!params.projectPath) {
               throw new Error('projectPath is required for run_project operation');
             }
-            return await handleRunProject({
+            const result = await handleRunProject({
               projectPath: params.projectPath,
               scene: params.scene
             });
+            return result.content[0].text;
           }
 
           case 'get_debug_output': {
@@ -478,7 +479,7 @@ export async function handleCliTool(name: string, args: any) {
   }
 }
 
-async function handleLaunchEditor(args: any): Promise<string> {
+async function handleLaunchEditor(args: any): Promise<ToolResult> {
   if (!args.projectPath) {
     throw new Error('Project path is required');
   }
@@ -499,10 +500,12 @@ async function handleLaunchEditor(args: any): Promise<string> {
     detached: true
   });
 
-  return `Godot editor launched successfully for project at ${args.projectPath}.`;
+  return {
+    content: [{ type: 'text', text: `Godot editor launched successfully for project at ${args.projectPath}.` }]
+  };
 }
 
-async function handleRunProject(args: any): Promise<string> {
+async function handleRunProject(args: any): Promise<ToolResult> {
   if (!args.projectPath) {
     throw new Error('Project path is required');
   }
@@ -519,7 +522,9 @@ async function handleRunProject(args: any): Promise<string> {
 
   // Kill any existing process
   if (activeProcess) {
+    console.log('[CLI] Killing existing Godot process...');
     activeProcess.kill();
+    activeProcess = null;
   }
 
   const cmdArgs = ['-d', '--path', args.projectPath];
@@ -527,30 +532,105 @@ async function handleRunProject(args: any): Promise<string> {
     cmdArgs.push(args.scene);
   }
 
-  const process = spawn(godotPath, cmdArgs, { stdio: 'pipe' });
+  console.log(`[CLI] Starting Godot process: ${godotPath} ${cmdArgs.join(' ')}`);
+
+  // Clear previous output
   output.length = 0;
   errors.length = 0;
 
-  process.stdout?.on('data', (data: Buffer) => {
-    const lines = data.toString().split('\n');
-    output.push(...lines);
+  return new Promise((resolve, reject) => {
+    try {
+      if (!godotPath) {
+        throw new Error('Godot executable path is not available');
+      }
+
+      const process = spawn(godotPath, cmdArgs, {
+        stdio: 'pipe',
+        detached: false // Keep process attached to parent
+      }) as any; // Type assertion to handle spawn return type
+
+      let startupTimeout: NodeJS.Timeout;
+      let hasStarted = false;
+
+      // Set up output handlers
+      process.stdout?.on('data', (data: Buffer) => {
+        const lines = data.toString().split('\n').filter(line => line.trim());
+        if (lines.length > 0) {
+          console.log('[CLI] Godot stdout:', lines.join('\n'));
+          output.push(...lines);
+
+          // Check for successful startup indicators
+          if (!hasStarted && lines.some(line =>
+            line.includes('Godot Engine') ||
+            line.includes('OpenGL') ||
+            line.includes('Vulkan') ||
+            line.includes('Running:')
+          )) {
+            hasStarted = true;
+            if (startupTimeout) {
+              clearTimeout(startupTimeout);
+            }
+            activeProcess = process;
+            console.log('[CLI] Godot process started successfully');
+            resolve({
+              content: [{ type: 'text', text: `Godot project started successfully in debug mode. Use get_debug_output to see output.` }]
+            });
+          }
+        }
+      });
+
+      process.stderr?.on('data', (data: Buffer) => {
+        const lines = data.toString().split('\n').filter(line => line.trim());
+        if (lines.length > 0) {
+          console.error('[CLI] Godot stderr:', lines.join('\n'));
+          errors.push(...lines);
+        }
+      });
+
+      // Handle process errors
+      process.on('error', (error: Error) => {
+        console.error('[CLI] Failed to start Godot process:', error);
+        if (startupTimeout) {
+          clearTimeout(startupTimeout);
+        }
+        reject(new Error(`Failed to start Godot process: ${error.message}`));
+      });
+
+      // Handle process exit
+      process.on('exit', (code: number | null, signal: NodeJS.Signals | null) => {
+        console.log(`[CLI] Godot process exited with code ${code}, signal ${signal}`);
+        if (startupTimeout) {
+          clearTimeout(startupTimeout);
+        }
+
+        if (!hasStarted) {
+          // Process exited before successful startup
+          const errorMsg = code !== null
+            ? `Godot process exited with code ${code}`
+            : `Godot process terminated by signal ${signal}`;
+          reject(new Error(errorMsg));
+        }
+
+        activeProcess = null;
+      });
+
+      // Timeout for startup verification
+      startupTimeout = setTimeout(() => {
+        if (!hasStarted) {
+          console.error('[CLI] Godot process startup timeout');
+          process.kill();
+          reject(new Error('Godot process failed to start within timeout period'));
+        }
+      }, 10000); // 10 second timeout
+
+    } catch (error) {
+      console.error('[CLI] Error spawning Godot process:', error);
+      reject(new Error(`Failed to spawn Godot process: ${(error as Error).message}`));
+    }
   });
-
-  process.stderr?.on('data', (data: Buffer) => {
-    const lines = data.toString().split('\n');
-    errors.push(...lines);
-  });
-
-  process.on('exit', () => {
-    activeProcess = null;
-  });
-
-  activeProcess = process;
-
-  return `Godot project started in debug mode. Use get_debug_output to see output.`;
 }
 
-async function handleGetDebugOutput() {
+async function handleGetDebugOutput(): Promise<ToolResult> {
   if (!activeProcess) {
     throw new Error('No active Godot process.');
   }
@@ -561,29 +641,69 @@ async function handleGetDebugOutput() {
   };
 }
 
-async function handleStopProject() {
+async function handleStopProject(): Promise<ToolResult> {
   if (!activeProcess) {
-    throw new Error('No active Godot process to stop.');
+    // Check if we have any buffered output to show
+    if (output.length === 0 && errors.length === 0) {
+      throw new Error('No active Godot process to stop and no buffered output available.');
+    }
+
+    console.log('[CLI] No active process to stop, but returning buffered output');
+    const finalOutput = [...output];
+    const finalErrors = [...errors];
+
+    return {
+      content: [{
+        type: 'text',
+        text: JSON.stringify({
+          message: 'No active process was running',
+          finalOutput,
+          finalErrors,
+          note: 'Showing buffered output from previous process'
+        }, null, 2)
+      }]
+    };
   }
 
-  activeProcess.kill();
-  const finalOutput = [...output];
-  const finalErrors = [...errors];
-  activeProcess = null;
+  console.log('[CLI] Stopping Godot process...');
 
-  return {
-    content: [{
-      type: 'text',
-      text: JSON.stringify({
-        message: 'Godot project stopped',
-        finalOutput,
-        finalErrors
-      }, null, 2)
-    }]
-  };
+  return new Promise((resolve) => {
+    const finalOutput = [...output];
+    const finalErrors = [...errors];
+
+    // Set up exit handler
+    activeProcess.on('exit', (code: number | null, signal: NodeJS.Signals | null) => {
+      console.log(`[CLI] Godot process stopped with code ${code}, signal ${signal}`);
+      activeProcess = null;
+
+      resolve({
+        content: [{
+          type: 'text',
+          text: JSON.stringify({
+            message: 'Godot project stopped successfully',
+            exitCode: code,
+            exitSignal: signal,
+            finalOutput,
+            finalErrors
+          }, null, 2)
+        }]
+      });
+    });
+
+    // Kill the process
+    activeProcess.kill('SIGTERM');
+
+    // Fallback timeout in case process doesn't exit gracefully
+    setTimeout(() => {
+      if (activeProcess) {
+        console.log('[CLI] Force killing Godot process...');
+        activeProcess.kill('SIGKILL');
+      }
+    }, 5000); // 5 second timeout
+  });
 }
 
-async function handleGetGodotVersion() {
+async function handleGetGodotVersion(): Promise<ToolResult> {
   await detectGodotPath();
   if (!godotPath) {
     throw new Error('Could not find a valid Godot executable path');
@@ -595,7 +715,7 @@ async function handleGetGodotVersion() {
   };
 }
 
-async function handleListProjects(args: any) {
+async function handleListProjects(args: any): Promise<ToolResult> {
   if (!args.directory) {
     throw new Error('Directory is required');
   }

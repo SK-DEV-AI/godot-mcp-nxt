@@ -220,12 +220,17 @@ func _process(_delta):
 						var cmd_type = data.get("type")
 						var params = data.get("params", {})
 						var cmd_id = data.get("commandId", "")
-						
+
 						print("[Client ", id, "] Processing command: ", cmd_type)
-						
-						# Route command to command handler via signal
-						# The command handler will handle the response via send_response
-						emit_signal("command_received", id, data)
+
+						# Handle screenshot and fuzzy matching commands directly
+						if cmd_type in ["capture_editor_screenshot", "capture_game_screenshot", "get_supported_screenshot_formats"]:
+							_handle_screenshot_command(id, cmd_type, params, cmd_id)
+						elif cmd_type in ["fuzzy_match_nodes", "fuzzy_match_scenes", "fuzzy_match_scripts"]:
+							_handle_fuzzy_command(id, cmd_type, params, cmd_id)
+						else:
+							# Route other commands to command handler via signal
+							emit_signal("command_received", id, data)
 				else:
 					print("[Client ", id, "] Failed to parse JSON: ", json.get_error_message())
 	
@@ -265,3 +270,31 @@ func stop_server() -> void:
 		
 func get_port() -> int:
 	return port
+
+## Handle screenshot commands
+func _handle_screenshot_command(client_id: int, command_type: String, params: Dictionary, command_id: String) -> void:
+	var command_handler = get_node("CommandHandler")
+	if not command_handler:
+		send_response(client_id, {
+			"status": "error",
+			"message": "Command handler not found",
+			"commandId": command_id
+		})
+		return
+
+	# Delegate to command handler
+	command_handler._handle_screenshot_command(client_id, command_type, params, command_id)
+
+## Handle fuzzy matching commands
+func _handle_fuzzy_command(client_id: int, command_type: String, params: Dictionary, command_id: String) -> void:
+	var command_handler = get_node("CommandHandler")
+	if not command_handler:
+		send_response(client_id, {
+			"status": "error",
+			"message": "Command handler not found",
+			"commandId": command_id
+		})
+		return
+
+	# Delegate to command handler
+	command_handler._handle_fuzzy_command(client_id, command_type, params, command_id)

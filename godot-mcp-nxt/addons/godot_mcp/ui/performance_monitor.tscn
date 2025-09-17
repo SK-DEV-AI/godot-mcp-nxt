@@ -1,0 +1,139 @@
+[gd_scene load_steps=4 format=3 uid="uid://performance_monitor"]
+
+[ext_resource type="Script" path="res://addons/godot_mcp/ui/performance_monitor.gd" id="1"]
+[ext_resource type="Theme" uid="uid://default_theme" path="res://addons/godot_mcp/themes/mcp_theme.tres" id="2"]
+
+[sub_resource type="StyleBoxFlat" id="1"]
+bg_color = Color(0.1, 0.1, 0.15, 1)
+border_width_left = 1
+border_width_top = 1
+border_width_right = 1
+border_width_bottom = 1
+border_color = Color(0.3, 0.3, 0.4, 1)
+corner_radius_top_left = 4
+corner_radius_top_right = 4
+corner_radius_bottom_right = 4
+corner_radius_bottom_left = 4
+
+[node name="PerformanceMonitor" type="PanelContainer"]
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+theme = ExtResource("2")
+script = ExtResource("1")
+
+[node name="VBoxContainer" type="VBoxContainer" parent="."]
+layout_mode = 2
+
+[node name="Header" type="HBoxContainer" parent="VBoxContainer"]
+layout_mode = 2
+
+[node name="Title" type="Label" parent="VBoxContainer/Header"]
+layout_mode = 2
+size_flags_horizontal = 3
+text = "Performance Monitor"
+horizontal_alignment = 1
+
+[node name="RefreshButton" type="Button" parent="VBoxContainer/Header"]
+layout_mode = 2
+text = "Refresh"
+
+[node name="ScrollContainer" type="ScrollContainer" parent="VBoxContainer"]
+layout_mode = 2
+size_flags_vertical = 3
+
+[node name="MetricsContainer" type="VBoxContainer" parent="VBoxContainer/ScrollContainer"]
+layout_mode = 2
+size_flags_horizontal = 3
+
+[node name="FPSMonitor" type="HBoxContainer" parent="VBoxContainer/ScrollContainer/MetricsContainer"]
+layout_mode = 2
+
+[node name="FPSLabel" type="Label" parent="VBoxContainer/ScrollContainer/MetricsContainer/FPSMonitor"]
+layout_mode = 2
+size_flags_horizontal = 3
+text = "FPS:"
+
+[node name="FPSValue" type="Label" parent="VBoxContainer/ScrollContainer/MetricsContainer/FPSMonitor"]
+layout_mode = 2
+size_flags_horizontal = 3
+text = "--"
+horizontal_alignment = 2
+
+[node name="MemoryMonitor" type="HBoxContainer" parent="VBoxContainer/ScrollContainer/MetricsContainer"]
+layout_mode = 2
+
+[node name="MemoryLabel" type="Label" parent="VBoxContainer/ScrollContainer/MetricsContainer/MemoryMonitor"]
+layout_mode = 2
+size_flags_horizontal = 3
+text = "Memory Usage:"
+
+[node name="MemoryValue" type="Label" parent="VBoxContainer/ScrollContainer/MetricsContainer/MemoryMonitor"]
+layout_mode = 2
+size_flags_horizontal = 3
+text = "-- MB"
+horizontal_alignment = 2
+
+[node name="PhysicsMonitor" type="HBoxContainer" parent="VBoxContainer/ScrollContainer/MetricsContainer"]
+layout_mode = 2
+
+[node name="PhysicsLabel" type="Label" parent="VBoxContainer/ScrollContainer/MetricsContainer/PhysicsMonitor"]
+layout_mode = 2
+size_flags_horizontal = 3
+text = "Physics Time:"
+
+[node name="PhysicsValue" type="Label" parent="VBoxContainer/ScrollContainer/MetricsContainer/PhysicsMonitor"]
+layout_mode = 2
+size_flags_horizontal = 3
+text = "-- ms"
+horizontal_alignment = 2
+
+[node name="RenderMonitor" type="HBoxContainer" parent="VBoxContainer/ScrollContainer/MetricsContainer"]
+layout_mode = 2
+
+[node name="RenderLabel" type="Label" parent="VBoxContainer/ScrollContainer/MetricsContainer/RenderMonitor"]
+layout_mode = 2
+size_flags_horizontal = 3
+text = "Render Objects:"
+
+[node name="RenderValue" type="Label" parent="VBoxContainer/ScrollContainer/MetricsContainer/RenderMonitor"]
+layout_mode = 2
+size_flags_horizontal = 3
+text = "--"
+horizontal_alignment = 2
+
+[node name="CustomMetrics" type="VBoxContainer" parent="VBoxContainer/ScrollContainer/MetricsContainer"]
+layout_mode = 2
+
+[node name="CustomLabel" type="Label" parent="VBoxContainer/ScrollContainer/MetricsContainer/CustomMetrics"]
+layout_mode = 2
+text = "Custom Metrics:"
+theme_override_font_sizes/font_size = 14
+
+[node name="CustomContainer" type="VBoxContainer" parent="VBoxContainer/ScrollContainer/MetricsContainer/CustomMetrics"]
+layout_mode = 2
+
+[node name="Footer" type="HBoxContainer" parent="VBoxContainer"]
+layout_mode = 2
+
+[node name="AutoRefresh" type="CheckBox" parent="VBoxContainer/Footer"]
+layout_mode = 2
+text = "Auto Refresh"
+
+[node name="IntervalLabel" type="Label" parent="VBoxContainer/Footer"]
+layout_mode = 2
+text = "Interval:"
+
+[node name="IntervalSpin" type="SpinBox" parent="VBoxContainer/Footer"]
+layout_mode = 2
+min_value = 0.1
+max_value = 10.0
+step = 0.1
+value = 1.0
+suffix = "s"
+
+[node name="ExportButton" type="Button" parent="VBoxContainer/Footer"]
+layout_mode = 2
+text = "Export Data"

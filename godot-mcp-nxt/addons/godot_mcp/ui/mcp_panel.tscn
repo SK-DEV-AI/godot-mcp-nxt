@@ -81,16 +81,26 @@ text = "0"
 [node name="HSeparator2" type="HSeparator" parent="VBoxContainer"]
 layout_mode = 2
 
-[node name="LogLabel" type="Label" parent="VBoxContainer"]
-layout_mode = 2
-text = "Server Log:"
-
-[node name="LogContainer" type="VBoxContainer" parent="VBoxContainer"]
+[node name="TabContainer" type="TabContainer" parent="VBoxContainer"]
 layout_mode = 2
 size_flags_vertical = 3
 
-[node name="LogText" type="TextEdit" parent="VBoxContainer/LogContainer"]
+[node name="Server" type="VBoxContainer" parent="VBoxContainer/TabContainer"]
+layout_mode = 2
+
+[node name="LogLabel" type="Label" parent="VBoxContainer/TabContainer/Server"]
+layout_mode = 2
+text = "Server Log:"
+
+[node name="LogContainer" type="VBoxContainer" parent="VBoxContainer/TabContainer/Server"]
+layout_mode = 2
+size_flags_vertical = 3
+
+[node name="LogText" type="TextEdit" parent="VBoxContainer/TabContainer/Server/LogContainer"]
 layout_mode = 2
 size_flags_vertical = 3
 editable = false
 wrap_mode = 1
+
+[node name="Performance" type="VBoxContainer" parent="VBoxContainer/TabContainer"]
+layout_mode = 2

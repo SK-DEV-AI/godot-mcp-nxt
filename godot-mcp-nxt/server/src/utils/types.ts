@@ -22,3 +22,10 @@ export interface MCPTool<T = any> {
 export interface CommandResult {
   [key: string]: any;
 }
+
+/**
+ * Standard tool result format
+ */
+export interface ToolResult {
+  content: Array<{ type: string; text: string }>;
+}
