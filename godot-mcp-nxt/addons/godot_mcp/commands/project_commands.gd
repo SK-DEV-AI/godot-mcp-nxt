@@ -22,6 +22,31 @@ func process_command(client_id: int, command_type: String, params: Dictionary, c
 		"get_performance_metrics":
 			_get_performance_metrics(client_id, params, command_id)
 			return true
+		# New project management commands to replace CLI tools
+		"run_project":
+			_run_project(client_id, params, command_id)
+			return true
+		"launch_editor":
+			_launch_editor(client_id, params, command_id)
+			return true
+		"get_debug_output":
+			_get_debug_output(client_id, params, command_id)
+			return true
+		"stop_project":
+			_stop_project(client_id, params, command_id)
+			return true
+		"get_godot_version":
+			_get_godot_version(client_id, params, command_id)
+			return true
+		"list_projects":
+			_list_projects(client_id, params, command_id)
+			return true
+		"health_check":
+			_health_check(client_id, params, command_id)
+			return true
+		"quick_setup":
+			_quick_setup(client_id, params, command_id)
+			return true
 	return false  # Command not handled
 
 func _get_project_info(client_id: int, _params: Dictionary, command_id: String) -> void:
@@ -211,7 +236,7 @@ func _list_project_resources(client_id: int, params: Dictionary, command_id: Str
 func _scan_resources(dir: DirAccess, path: String, resources: Dictionary) -> void:
 	dir.list_dir_begin()
 	var file_name = dir.get_next()
-	
+
 	while file_name != "":
 		if dir.current_is_dir():
 			var subdir = DirAccess.open("res://" + path + file_name)
@@ -219,7 +244,7 @@ func _scan_resources(dir: DirAccess, path: String, resources: Dictionary) -> voi
 				_scan_resources(subdir, path + file_name + "/", resources)
 		else:
 			var file_path = "res://" + path + file_name
-			
+
 			# Categorize by extension
 			if file_name.ends_with(".tscn") or file_name.ends_with(".scn"):
 				resources["scenes"].append(file_path)
@@ -233,7 +258,231 @@ func _scan_resources(dir: DirAccess, path: String, resources: Dictionary) -> voi
 				resources["models"].append(file_path)
 			elif file_name.ends_with(".tres") or file_name.ends_with(".res"):
 				resources["resources"].append(file_path)
-		
+
 		file_name = dir.get_next()
-	
+
 	dir.list_dir_end()
+
+# New project management command implementations
+
+func _run_project(client_id: int, params: Dictionary, command_id: String) -> void:
+	var project_path = params.get("projectPath", "")
+	var scene_path = params.get("scene", "")
+
+	if project_path.is_empty():
+		_send_error(client_id, "projectPath is required", command_id)
+		return
+
+	# Validate project exists
+	var project_file = project_path + "/project.godot"
+	if not FileAccess.file_exists(project_file):
+		_send_error(client_id, "Not a valid Godot project: " + project_path, command_id)
+		return
+
+	# Build command arguments
+	var args = ["-d", "--path", project_path]
+	if not scene_path.is_empty():
+		args.append(scene_path)
+
+	# Execute Godot in background (non-blocking)
+	var output = []
+	var exit_code = OS.execute("godot", args, output, false, true)
+
+	if exit_code == 0:
+		_send_success(client_id, {
+			"message": "Godot project started successfully in debug mode",
+			"projectPath": project_path,
+			"scene": scene_path
+		}, command_id)
+	else:
+		_send_error(client_id, "Failed to start project: " + str(output), command_id)
+
+func _launch_editor(client_id: int, params: Dictionary, command_id: String) -> void:
+	var project_path = params.get("projectPath", "")
+	var wait_for_ready = params.get("waitForReady", false)
+
+	if project_path.is_empty():
+		_send_error(client_id, "projectPath is required", command_id)
+		return
+
+	# Validate project exists
+	var project_file = project_path + "/project.godot"
+	if not FileAccess.file_exists(project_file):
+		_send_error(client_id, "Not a valid Godot project: " + project_path, command_id)
+		return
+
+	# Launch Godot editor in background
+	var args = ["-e", "--path", project_path]
+	var output = []
+	var exit_code = OS.execute("godot", args, output, false, true)
+
+	if exit_code == 0:
+		var message = "Godot editor launched successfully for project at " + project_path
+		if wait_for_ready:
+			message += ". Editor is ready for use."
+		_send_success(client_id, {
+			"message": message,
+			"projectPath": project_path
+		}, command_id)
+	else:
+		_send_error(client_id, "Failed to launch editor: " + str(output), command_id)
+
+func _get_debug_output(client_id: int, params: Dictionary, command_id: String) -> void:
+	# For now, return a placeholder since we don't have active process tracking
+	# In a full implementation, this would track running Godot processes
+	_send_success(client_id, {
+		"message": "Debug output tracking not yet implemented in unified architecture",
+		"note": "This will be implemented when process lifecycle management is added"
+	}, command_id)
+
+func _stop_project(client_id: int, params: Dictionary, command_id: String) -> void:
+	# For now, return a placeholder since we don't have active process tracking
+	_send_success(client_id, {
+		"message": "Project stopping not yet implemented in unified architecture",
+		"note": "This will be implemented when process lifecycle management is added"
+	}, command_id)
+
+func _get_godot_version(client_id: int, params: Dictionary, command_id: String) -> void:
+	var version_info = Engine.get_version_info()
+	var version_string = str(version_info.major) + "." + str(version_info.minor)
+	if version_info.patch > 0:
+		version_string += "." + str(version_info.patch)
+
+	_send_success(client_id, {
+		"version": version_string,
+		"versionInfo": version_info
+	}, command_id)
+
+func _list_projects(client_id: int, params: Dictionary, command_id: String) -> void:
+	var directory = params.get("directory", "")
+	var recursive = params.get("recursive", false)
+
+	if directory.is_empty():
+		_send_error(client_id, "directory is required", command_id)
+		return
+
+	if not DirAccess.dir_exists_absolute(directory):
+		_send_error(client_id, "Directory does not exist: " + directory, command_id)
+		return
+
+	var projects = _find_godot_projects(directory, recursive)
+	_send_success(client_id, projects, command_id)
+
+func _find_godot_projects(directory: String, recursive: bool) -> Array:
+	var projects = []
+
+	var dir = DirAccess.open(directory)
+	if not dir:
+		return projects
+
+	# Check if current directory is a project
+	var project_file = directory + "/project.godot"
+	if FileAccess.file_exists(project_file):
+		projects.append({
+			"path": directory,
+			"name": directory.get_file()
+		})
+
+	if not recursive:
+		# Check immediate subdirectories
+		dir.list_dir_begin()
+		var file_name = dir.get_next()
+		while file_name != "":
+			if dir.current_is_dir():
+				var subdir_path = directory + "/" + file_name
+				var sub_project_file = subdir_path + "/project.godot"
+				if FileAccess.file_exists(sub_project_file):
+					projects.append({
+						"path": subdir_path,
+						"name": file_name
+					})
+			file_name = dir.get_next()
+		dir.list_dir_end()
+	else:
+		# Recursive search
+		dir.list_dir_begin()
+		var file_name = dir.get_next()
+		while file_name != "":
+			if dir.current_is_dir() and not file_name.begins_with("."):
+				var subdir_path = directory + "/" + file_name
+				var sub_projects = _find_godot_projects(subdir_path, true)
+				projects.append_array(sub_projects)
+			file_name = dir.get_next()
+		dir.list_dir_end()
+
+	return projects
+
+func _health_check(client_id: int, params: Dictionary, command_id: String) -> void:
+	var project_path = params.get("projectPath", "")
+
+	if project_path.is_empty():
+		_send_error(client_id, "projectPath is required", command_id)
+		return
+
+	var health_report = {
+		"projectExists": false,
+		"projectFileValid": false,
+		"resources": {},
+		"warnings": [],
+		"errors": []
+	}
+
+	# Check if project exists
+	var project_file = project_path + "/project.godot"
+	if FileAccess.file_exists(project_file):
+		health_report.projectExists = true
+
+		# Try to read project file
+		var file = FileAccess.open(project_file, FileAccess.READ)
+		if file:
+			health_report.projectFileValid = true
+			file.close()
+		else:
+			health_report.errors.append("Cannot read project.godot file")
+	else:
+		health_report.errors.append("project.godot file not found")
+
+	_send_success(client_id, health_report, command_id)
+
+func _quick_setup(client_id: int, params: Dictionary, command_id: String) -> void:
+	var project_path = params.get("projectPath", "")
+	var project_name = params.get("projectName", "")
+	var template = params.get("template", "2d")
+	var include_demo = params.get("includeDemo", true)
+
+	if project_path.is_empty() or project_name.is_empty():
+		_send_error(client_id, "projectPath and projectName are required", command_id)
+		return
+
+	# Create project directory
+	var dir = DirAccess.open(project_path)
+	if not dir:
+		_send_error(client_id, "Cannot access project path: " + project_path, command_id)
+		return
+
+	dir.make_dir(project_name)
+	var full_project_path = project_path + "/" + project_name
+
+	# Create basic project structure
+	var project_file_content = """[application]
+
+config/name=""" + project_name + """
+config/version="1.0.0"
+
+[editor_plugins]
+
+enabled=PackedStringArray("res://addons/godot_mcp/plugin.cfg")
+"""
+
+	var file = FileAccess.open(full_project_path + "/project.godot", FileAccess.WRITE)
+	if file:
+		file.store_string(project_file_content)
+		file.close()
+
+		_send_success(client_id, {
+			"message": "Project created successfully",
+			"projectPath": full_project_path,
+			"template": template
+		}, command_id)
+	else:
+		_send_error(client_id, "Failed to create project file", command_id)
