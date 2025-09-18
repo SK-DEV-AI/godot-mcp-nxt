@@ -128,12 +128,12 @@ Godot MCP Server is a sophisticated integration that bridges the Godot game engi
 
 ## 📚 Documentation
 
-- **[Setup Guide](SETUP.md)**: Detailed installation and configuration
-- **[User Guide](USER_GUIDE.md)**: How to use all features
-- **[API Reference](API_REFERENCE.md)**: Complete API documentation
-- **[Architecture](ARCHITECTURE.md)**: System design and components
-- **[Developer Guide](DEVELOPER_GUIDE.md)**: Contributing and development
-- **[Troubleshooting](TROUBLESHOOTING.md)**: Common issues and solutions
+- **[Setup Guide](godot-mcp-nxt/docs/SETUP.md)**: Detailed installation and configuration
+- **[User Guide](godot-mcp-nxt/docs/USER_GUIDE.md)**: How to use all features
+- **[API Reference](godot-mcp-nxt/docs/API_REFERENCE.md)**: Complete API documentation
+- **[Architecture](godot-mcp-nxt/docs/ARCHITECTURE.md)**: System design and components
+- **[Developer Guide](godot-mcp-nxt/docs/DEVELOPER_GUIDE.md)**: Contributing and development
+- **[Troubleshooting](godot-mcp-nxt/docs/TROUBLESHOOTING.md)**: Common issues and solutions
 
 ## 🎮 Example Usage
 
@@ -230,7 +230,7 @@ npm test -- --testNamePattern="performance"
 
 ## 🤝 Contributing
 
-We welcome contributions! Please see our [Developer Guide](DEVELOPER_GUIDE.md) for details on:
+We welcome contributions! Please see our [Developer Guide](godot-mcp-nxt/docs/DEVELOPER_GUIDE.md) for details on:
 
 - Setting up a development environment
 - Code style and conventions
@@ -258,9 +258,9 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ## 📞 Support
 
-- **Issues**: [GitHub Issues](https://github.com/your-repo/godot-mcp-nxt/issues)
-- **Discussions**: [GitHub Discussions](https://github.com/your-repo/godot-mcp-nxt/discussions)
-- **Documentation**: [Full Documentation](https://your-docs-site.com)
+- **Issues**: [GitHub Issues](https://github.com/SK-DEV-AI/godot-mcp-nxt/issues)
+- **Discussions**: [GitHub Discussions](https://github.com/SK-DEV-AI/godot-mcp-nxt/discussions)
+- **Documentation**: [Full Documentation](https://github.com/SK-DEV-AI/godot-mcp-nxt/tree/main/godot-mcp-nxt/docs)
 
 ---
 
