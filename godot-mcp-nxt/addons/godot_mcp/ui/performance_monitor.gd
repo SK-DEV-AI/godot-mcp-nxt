@@ -35,6 +35,16 @@ func _ready() -> void:
 	_initialize_custom_monitors()
 	_update_metrics()
 
+	# Connect to server for additional metrics
+	_connect_to_server()
+
+func _connect_to_server() -> void:
+	# Try to get server reference from plugin
+	var plugin = Engine.get_meta("GodotMCPPlugin")
+	if plugin and plugin.has_signal("metrics_updated"):
+		plugin.connect("metrics_updated", Callable(self, "_on_server_metrics_updated"))
+		print("Performance monitor connected to server metrics")
+
 func _setup_ui() -> void:
 	# Configure UI elements
 	refresh_button.tooltip_text = "Manually refresh performance metrics"
@@ -84,7 +94,8 @@ func _collect_metrics() -> Dictionary:
 	metrics["frame_time"] = Performance.get_monitor(Performance.TIME_PROCESS) * 1000.0  # Convert to ms
 	metrics["physics_time"] = Performance.get_monitor(Performance.TIME_PHYSICS_PROCESS) * 1000.0
 	metrics["memory_static"] = Performance.get_monitor(Performance.MEMORY_STATIC) / 1024.0 / 1024.0  # Convert to MB
-	metrics["memory_dynamic"] = Performance.get_monitor(Performance.MEMORY_DYNAMIC) / 1024.0 / 1024.0
+	# Note: MEMORY_DYNAMIC may not be available in Godot 4.5, using alternative
+	metrics["memory_dynamic"] = 0.0  # Placeholder for Godot 4.5 compatibility
 	metrics["render_objects"] = Performance.get_monitor(Performance.RENDER_TOTAL_OBJECTS_IN_FRAME)
 	metrics["render_draw_calls"] = Performance.get_monitor(Performance.RENDER_TOTAL_DRAW_CALLS_IN_FRAME)
 	metrics["physics_2d_active"] = Performance.get_monitor(Performance.PHYSICS_2D_ACTIVE_OBJECTS)
@@ -264,3 +275,31 @@ func set_alert_threshold(metric: String, threshold: float) -> void:
 
 func get_alert_thresholds() -> Dictionary:
 	return alert_thresholds.duplicate()
+
+func _on_server_metrics_updated(server_metrics: Dictionary) -> void:
+	# Update UI with server-specific metrics
+	if server_metrics.has("active_connections"):
+		# Add server metrics to custom display
+		_update_server_metrics_display(server_metrics)
+
+func _update_server_metrics_display(server_metrics: Dictionary) -> void:
+	# Add server metrics to the custom metrics display
+	var server_metrics_text = "Server Metrics:\n"
+	server_metrics_text += "Active Connections: %d\n" % server_metrics.get("active_connections", 0)
+	server_metrics_text += "Messages/Second: %.1f\n" % server_metrics.get("messages_per_second", 0.0)
+
+	# Update or add server metrics label
+	var server_label = Label.new()
+	server_label.text = server_metrics_text
+	server_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+
+	# Add to custom container if not already present
+	var has_server_metrics = false
+	for child in custom_container.get_children():
+		if child is Label and child.text.begins_with("Server Metrics:"):
+			child.text = server_metrics_text
+			has_server_metrics = true
+			break
+
+	if not has_server_metrics:
+		custom_container.add_child(server_label)

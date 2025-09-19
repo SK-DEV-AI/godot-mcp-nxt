@@ -1,315 +1,352 @@
-/**
- * Shared caching layer for Godot MCP operations
- * Provides caching for expensive operations like file scanning, project structure analysis, etc.
- */
+// Intelligent Caching System for Godot MCP Server
+// Implements LRU eviction, TTL, and performance monitoring
 
-interface CacheEntry<T> {
+interface CacheEntry<T = any> {
   data: T;
   timestamp: number;
-  ttl: number; // Time to live in milliseconds
+  accessCount: number;
+  size: number;
+  ttl?: number;
+  key: string;
 }
 
-interface CacheOptions {
-  ttl?: number; // Default 5 minutes
-  keyPrefix?: string;
+interface CacheStats {
+  hits: number;
+  misses: number;
+  evictions: number;
+  totalRequests: number;
+  hitRate: number;
+  currentSize: number;
+  maxSize: number;
+  memoryUsage: number;
+  memoryPressure: number;
 }
 
-class SharedCache {
-  private cache = new Map<string, CacheEntry<any>>();
-  private defaultTTL = 5 * 60 * 1000; // 5 minutes
+export class SmartCache<T = any> {
+  private cache = new Map<string, CacheEntry<T>>();
+  private accessOrder = new Map<string, number>(); // For LRU tracking
+  private accessCounter = 0;
+  private maxSize: number;
+  private defaultTTL: number;
+  private stats: CacheStats;
 
-  /**
-   * Get cached data if it exists and hasn't expired
-   */
-  get<T>(key: string): T | null {
+  constructor(maxSize = 100, defaultTTL = 300000) { // 5 minutes default TTL
+    this.maxSize = maxSize;
+    this.defaultTTL = defaultTTL;
+    this.stats = {
+      hits: 0,
+      misses: 0,
+      evictions: 0,
+      totalRequests: 0,
+      hitRate: 0,
+      currentSize: this.cache.size,
+      maxSize,
+      memoryUsage: 0,
+      memoryPressure: 0
+    };
+  }
+
+  get(key: string): T | null {
+    this.stats.totalRequests++;
+
     const entry = this.cache.get(key);
-    if (!entry) return null;
-
-    if (Date.now() - entry.timestamp > entry.ttl) {
-      this.cache.delete(key);
+    if (!entry) {
+      this.stats.misses++;
+      this.updateHitRate();
       return null;
     }
+
+    // Check TTL
+    if (this.isExpired(entry)) {
+      this.cache.delete(key);
+      this.accessOrder.delete(key);
+      this.stats.misses++;
+      this.updateHitRate();
+      return null;
+    }
+
+    // Update access tracking for LRU
+    entry.accessCount++;
+    this.accessOrder.set(key, ++this.accessCounter);
+
+    this.stats.hits++;
+    this.updateHitRate();
 
     return entry.data;
   }
 
-  /**
-   * Set data in cache with optional TTL
-   */
-  set<T>(key: string, data: T, options: CacheOptions = {}): void {
+  set(key: string, data: T, options: {
+    ttl?: number;
+    size?: number;
+  } = {}): void {
     const ttl = options.ttl || this.defaultTTL;
-    this.cache.set(key, {
+    const size = options.size || 1;
+
+    // Evict if necessary
+    if (!this.cache.has(key) && this.cache.size >= this.maxSize) {
+      this.evictLRU();
+    }
+
+    const entry: CacheEntry<T> = {
       data,
       timestamp: Date.now(),
-      ttl
-    });
+      accessCount: 1,
+      size,
+      ttl,
+      key
+    };
+
+    // Remove old entry if it exists
+    if (this.cache.has(key)) {
+      this.cache.delete(key);
+    }
+
+    this.cache.set(key, entry);
+    this.accessOrder.set(key, ++this.accessCounter);
+
+    this.stats.currentSize = this.cache.size;
+    this.updateMemoryPressure();
+
+    // Automatic cleanup under memory pressure
+    this.cleanupIfNeeded();
   }
 
-  /**
-   * Check if key exists and is valid
-   */
   has(key: string): boolean {
     const entry = this.cache.get(key);
     if (!entry) return false;
 
-    if (Date.now() - entry.timestamp > entry.ttl) {
+    if (this.isExpired(entry)) {
       this.cache.delete(key);
+      this.accessOrder.delete(key);
       return false;
     }
 
     return true;
   }
 
-  /**
-   * Delete a specific key
-   */
   delete(key: string): boolean {
-    return this.cache.delete(key);
+    if (this.cache.has(key)) {
+      this.cache.delete(key);
+      this.accessOrder.delete(key);
+      this.stats.currentSize = this.cache.size;
+      return true;
+    }
+    return false;
   }
 
-  /**
-   * Clear all cached data
-   */
   clear(): void {
     this.cache.clear();
+    this.accessOrder.clear();
+    this.accessCounter = 0;
+    this.stats.currentSize = 0;
+    this.stats.evictions = 0;
   }
 
-  /**
-   * Get cache statistics
-   */
-  getStats() {
-    let validEntries = 0;
-    let expiredEntries = 0;
-
-    this.cache.forEach((entry, key) => {
-      if (Date.now() - entry.timestamp > entry.ttl) {
-        expiredEntries++;
-      } else {
-        validEntries++;
-      }
-    });
-
-    return {
-      totalEntries: this.cache.size,
-      validEntries,
-      expiredEntries
-    };
+  getStats(): CacheStats {
+    return { ...this.stats };
   }
 
-  /**
-   * Clean up expired entries
-   */
-  cleanup(): void {
+  // Get cache entries sorted by access frequency (most accessed first)
+  getMostAccessed(limit = 10): Array<{ key: string; accessCount: number; data: T }> {
+    return Array.from(this.cache.entries())
+      .map(([key, entry]) => ({
+        key,
+        accessCount: entry.accessCount,
+        data: entry.data
+      }))
+      .sort((a, b) => b.accessCount - a.accessCount)
+      .slice(0, limit);
+  }
+
+  // Get cache entries sorted by recency (most recently accessed first)
+  getMostRecent(limit = 10): Array<{ key: string; lastAccess: number; data: T }> {
+    return Array.from(this.cache.entries())
+      .map(([key, entry]) => ({
+        key,
+        lastAccess: this.accessOrder.get(key) || 0,
+        data: entry.data
+      }))
+      .sort((a, b) => b.lastAccess - a.lastAccess)
+      .slice(0, limit);
+  }
+
+  // Cleanup expired entries
+  cleanup(): number {
+    let cleaned = 0;
     const now = Date.now();
-    this.cache.forEach((entry, key) => {
-      if (now - entry.timestamp > entry.ttl) {
+
+    for (const [key, entry] of this.cache.entries()) {
+      if (this.isExpired(entry)) {
         this.cache.delete(key);
+        this.accessOrder.delete(key);
+        cleaned++;
       }
-    });
+    }
+
+    this.stats.currentSize = this.cache.size;
+    this.updateMemoryPressure();
+    return cleaned;
   }
 
-  /**
-   * Create a cache key with prefix
-   */
-  createKey(operation: string, params: any, prefix?: string): string {
-    const paramStr = JSON.stringify(params, Object.keys(params).sort());
-    const fullPrefix = prefix ? `${prefix}:` : '';
-    return `${fullPrefix}${operation}:${paramStr}`;
+  private isExpired(entry: CacheEntry<T>): boolean {
+    if (!entry.ttl) return false;
+    return Date.now() - entry.timestamp > entry.ttl;
+  }
+
+  private evictLRU(): void {
+    if (this.cache.size === 0) return;
+
+    // Find the least recently used entry
+    let lruKey = '';
+    let oldestAccess = Number.MAX_SAFE_INTEGER;
+
+    for (const [key, accessTime] of this.accessOrder.entries()) {
+      if (accessTime < oldestAccess) {
+        oldestAccess = accessTime;
+        lruKey = key;
+      }
+    }
+
+    if (lruKey) {
+      this.cache.delete(lruKey);
+      this.accessOrder.delete(lruKey);
+      this.stats.evictions++;
+      console.log(`Evicted LRU cache entry: ${lruKey}`);
+    }
+  }
+
+  private updateHitRate(): void {
+    if (this.stats.totalRequests > 0) {
+      this.stats.hitRate = this.stats.hits / this.stats.totalRequests;
+    }
+  }
+
+  // Calculate approximate memory usage of cache
+  private calculateMemoryUsage(): number {
+    let totalSize = 0;
+    for (const entry of this.cache.values()) {
+      // Rough estimation: key size + data size + metadata
+      totalSize += entry.key.length * 2; // UTF-16 chars
+      totalSize += entry.size || 1; // Data size
+      totalSize += 100; // Metadata overhead
+    }
+    return totalSize;
+  }
+
+  // Update memory pressure metrics
+  private updateMemoryPressure(): void {
+    this.stats.memoryUsage = this.calculateMemoryUsage();
+    // Memory pressure as percentage of max size
+    this.stats.memoryPressure = this.maxSize > 0 ? (this.cache.size / this.maxSize) : 0;
+  }
+
+  // Get memory pressure level (0-1, where 1 is high pressure)
+  getMemoryPressure(): number {
+    this.updateMemoryPressure();
+    return this.stats.memoryPressure;
+  }
+
+  // Force cleanup if memory pressure is high
+  cleanupIfNeeded(memoryPressureThreshold = 0.8): number {
+    const pressure = this.getMemoryPressure();
+    if (pressure >= memoryPressureThreshold) {
+      console.log(`High memory pressure detected (${(pressure * 100).toFixed(1)}%), triggering cleanup`);
+      return this.cleanup();
+    }
+    return 0;
   }
 }
 
-// Global cache instance
-export const sharedCache = new SharedCache();
-
-// Cache key prefixes for different operation types
-export const CACHE_PREFIXES = {
-  GODOT_PATH: 'godot_path',
-  PROJECT_STRUCTURE: 'project_structure',
-  SCRIPT_CONTENT: 'script_content',
-  SCENE_STRUCTURE: 'scene_structure',
-  PROJECT_FILES: 'project_files',
-  SCRIPT_METADATA: 'script_metadata'
-} as const;
-
-/**
- * Cached wrapper for Godot path detection
- */
-export async function getCachedGodotPath(): Promise<string | null> {
-  const cacheKey = sharedCache.createKey('godot_path', {}, CACHE_PREFIXES.GODOT_PATH);
-
-  let godotPath = sharedCache.get<string>(cacheKey);
-  if (godotPath) {
-    return godotPath;
+// Specialized cache for Godot operations
+export class GodotOperationCache extends SmartCache {
+  constructor() {
+    super(200, 600000); // 200 entries, 10 minutes TTL
   }
 
-  // Import and use the detection logic directly
-  const util = await import('util');
-  const childProcess = await import('child_process');
-  const execAsync = util.promisify(childProcess.exec);
-  const { normalize } = await import('path');
-  const fs = await import('fs');
-
-  // Check environment variable
-  if (process.env.GODOT_PATH) {
-    const normalizedPath = normalize(process.env.GODOT_PATH);
+  // Cache key generation for common operations
+  generateKey(operation: string, params: Record<string, any>): string {
     try {
-      await execAsync(`"${normalizedPath}" --version`);
-      godotPath = normalizedPath;
-    } catch {
-      // Continue with auto-detection
+      const paramStr = JSON.stringify(params, Object.keys(params).sort());
+      return `${operation}:${this.hashString(paramStr)}`;
+    } catch (error) {
+      // Fallback for non-serializable params
+      console.warn('Failed to serialize cache params, using fallback key:', error);
+      return `${operation}:${this.hashString(JSON.stringify({ fallback: true }))}`;
     }
   }
 
-  // Auto-detect based on platform
-  if (!godotPath) {
-    const osPlatform = process.platform;
-    const possiblePaths: string[] = ['godot'];
-
-    if (osPlatform === 'darwin') {
-      possiblePaths.push(
-        '/Applications/Godot.app/Contents/MacOS/Godot',
-        '/Applications/Godot_4.app/Contents/MacOS/Godot'
-      );
-    } else if (osPlatform === 'win32') {
-      possiblePaths.push(
-        'C:\\Program Files\\Godot\\Godot.exe',
-        'C:\\Program Files (x86)\\Godot\\Godot.exe'
-      );
-    } else if (osPlatform === 'linux') {
-      possiblePaths.push(
-        '/usr/bin/godot',
-        '/usr/local/bin/godot'
-      );
+  // Improved string hashing for cache keys using djb2 algorithm
+  private hashString(str: string): string {
+    let hash = 5381;
+    for (let i = 0; i < str.length; i++) {
+      const char = str.charCodeAt(i);
+      hash = ((hash << 5) + hash) + char; // djb2 algorithm
+      hash = hash & 0xFFFFFFFF; // Convert to 32-bit integer
     }
-
-    for (const path of possiblePaths) {
-      const normalizedPath = normalize(path);
-      try {
-        await execAsync(`"${normalizedPath}" --version`);
-        godotPath = normalizedPath;
-        break;
-      } catch {
-        // Continue checking other paths
-      }
-    }
+    return Math.abs(hash).toString(36);
   }
 
-  if (godotPath) {
-    sharedCache.set(cacheKey, godotPath, { ttl: 30 * 60 * 1000 }); // 30 minutes
-  }
+  // Cache result of a Godot operation
+  async cacheOperation<T>(
+    operation: string,
+    params: Record<string, any>,
+    operationFn: () => Promise<T>
+  ): Promise<T> {
+    const key = this.generateKey(operation, params);
 
-  return godotPath;
+    // Try to get from cache first
+    const cached = this.get(key);
+    if (cached !== null) {
+      console.log(`Cache hit for operation: ${operation}`);
+      return cached;
+    }
+
+    // Execute operation and cache result
+    console.log(`Cache miss for operation: ${operation}, executing...`);
+    const result = await operationFn();
+    this.set(key, result);
+
+    return result;
+  }
 }
 
-/**
- * Cached wrapper for project structure
- */
-export async function getCachedProjectStructure(projectPath: string): Promise<any> {
-  const cacheKey = sharedCache.createKey('project_structure', { projectPath }, CACHE_PREFIXES.PROJECT_STRUCTURE);
+// Global cache instances
+let globalOperationCache: GodotOperationCache | null = null;
+let globalResourceCache: SmartCache | null = null;
 
-  let structure = sharedCache.get(cacheKey);
-  if (structure) {
-    return structure;
+export function getOperationCache(): GodotOperationCache {
+  if (!globalOperationCache) {
+    globalOperationCache = new GodotOperationCache();
   }
+  return globalOperationCache;
+}
 
-  // Calculate project structure directly
-  const fs = await import('fs');
-  const { join } = await import('path');
+export function getResourceCache(): SmartCache {
+  if (!globalResourceCache) {
+    globalResourceCache = new SmartCache(50, 1800000); // 50 entries, 30 minutes TTL
+  }
+  return globalResourceCache;
+}
 
-  try {
-    const structure = {
-      scenes: 0,
-      scripts: 0,
-      assets: 0,
-      other: 0,
-    };
-
-    const scanDirectory = (currentPath: string) => {
-      const entries = fs.readdirSync(currentPath, { withFileTypes: true });
-
-      for (const entry of entries) {
-        const entryPath = join(currentPath, entry.name);
-
-        if (entry.name.startsWith('.')) continue;
-
-        if (entry.isDirectory()) {
-          scanDirectory(entryPath);
-        } else if (entry.isFile()) {
-          const ext = entry.name.split('.').pop()?.toLowerCase();
-
-          if (ext === 'tscn') {
-            structure.scenes++;
-          } else if (ext === 'gd' || ext === 'gdscript' || ext === 'cs') {
-            structure.scripts++;
-          } else if (['png', 'jpg', 'jpeg', 'webp', 'svg', 'ttf', 'wav', 'mp3', 'ogg'].includes(ext || '')) {
-            structure.assets++;
-          } else {
-            structure.other++;
-          }
+// Periodic cleanup function
+export function startCacheCleanup(intervalMs = 300000): ReturnType<typeof setInterval> { // 5 minutes
+  return setInterval(() => {
+    try {
+      if (globalOperationCache) {
+        const cleanedOps = globalOperationCache.cleanup();
+        if (cleanedOps > 0) {
+          console.log(`Cleaned ${cleanedOps} expired operation cache entries`);
         }
       }
-    };
 
-    scanDirectory(projectPath);
-    sharedCache.set(cacheKey, structure, { ttl: 10 * 60 * 1000 }); // 10 minutes
-    return structure;
-  } catch (error) {
-    return {
-      error: 'Failed to get project structure',
-      scenes: 0,
-      scripts: 0,
-      assets: 0,
-      other: 0
-    };
-  }
-}
-
-/**
- * Cached wrapper for script content
- */
-export async function getCachedScriptContent(scriptPath: string): Promise<string | null> {
-  const cacheKey = sharedCache.createKey('script_content', { scriptPath }, CACHE_PREFIXES.SCRIPT_CONTENT);
-
-  let content = sharedCache.get<string>(cacheKey);
-  if (content) {
-    return content;
-  }
-
-  // Get from Godot connection
-  const { getGodotConnection } = await import('./godot_connection.js');
-  const godot = getGodotConnection();
-
-  try {
-    const result = await godot.sendCommand('get_script', { script_path: scriptPath });
-    content = result?.content;
-
-    if (content) {
-      sharedCache.set(cacheKey, content, { ttl: 5 * 60 * 1000 }); // 5 minutes
+      if (globalResourceCache) {
+        const cleanedRes = globalResourceCache.cleanup();
+        if (cleanedRes > 0) {
+          console.log(`Cleaned ${cleanedRes} expired resource cache entries`);
+        }
+      }
+    } catch (error) {
+      console.error('Error during cache cleanup:', error);
     }
-
-    return content;
-  } catch (error) {
-    console.error('Error getting cached script content:', error);
-    return null;
-  }
-}
-
-/**
- * Invalidate cache for specific patterns
- */
-export function invalidateCache(pattern: string): void {
-  sharedCache['cache'].forEach((value, key) => {
-    if (key.includes(pattern)) {
-      sharedCache.delete(key);
-    }
-  });
-}
-
-/**
- * Set up periodic cache cleanup
- */
-export function setupCacheCleanup(intervalMs: number = 10 * 60 * 1000): void { // Default 10 minutes
-  setInterval(() => {
-    sharedCache.cleanup();
   }, intervalMs);
 }

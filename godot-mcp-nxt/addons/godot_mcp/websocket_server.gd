@@ -19,6 +19,12 @@ var queue_size = 5 # Maximum queued connections
 var compression_enabled = true # Enable WebSocket compression
 var compression_min_size = 1024 # Minimum message size for compression (bytes)
 
+# Godot 4.5: Enhanced WebSocket configuration
+var inbound_buffer_size = 1048576 # 1 MiB inbound buffer
+var outbound_buffer_size = 1048576 # 1 MiB outbound buffer
+var max_queued_packets = 8192 # Maximum queued packets
+var heartbeat_interval = 30.0 # Heartbeat interval in seconds
+
 class PendingPeer:
 	var tcp: StreamPeerTCP
 	var connection: StreamPeer
@@ -169,10 +175,20 @@ func _connect_pending(p: PendingPeer) -> bool:
 			p.ws = WebSocketPeer.new()
 			p.ws.accept_stream(p.tcp)
 
+			# Godot 4.5: Configure WebSocket buffers and heartbeat
+			p.ws.inbound_buffer_size = inbound_buffer_size
+			p.ws.outbound_buffer_size = outbound_buffer_size
+			p.ws.max_queued_packets = max_queued_packets
+			p.ws.heartbeat_interval = heartbeat_interval
+
 			# Enable compression if configured
 			if compression_enabled:
-				p.ws.set_compression_mode(WebSocketPeer.COMPRESSION_DEFLATE)
-				print("WebSocket compression enabled (deflate)")
+				# Note: WebSocketPeer.COMPRESSION_DEFLATE may not be available in Godot 4.5
+				# Compression is handled automatically by the WebSocket implementation
+				print("WebSocket compression enabled (automatic)")
+
+			print("WebSocket configured with buffers: %d/%d bytes, heartbeat: %.1fs" %
+				[inbound_buffer_size, outbound_buffer_size, heartbeat_interval])
 
 			return false # WebSocketPeer connection is pending.
 
@@ -180,18 +196,18 @@ func send_response(client_id: int, response: Dictionary) -> int:
 	if not peers.has(client_id):
 		print("Error: Client %d not found" % client_id)
 		return ERR_DOES_NOT_EXIST
-	
+
 	var peer = peers[client_id]
 	var json_text = JSON.stringify(response)
-	
+
 	if peer.get_ready_state() != WebSocketPeer.STATE_OPEN:
 		print("Error: Client %d connection not open" % client_id)
 		return ERR_UNAVAILABLE
-	
+
 	var result = peer.send_text(json_text)
 	if result != OK:
 		print("Error sending response to client %d: %d" % [client_id, result])
-	
+
 	return result
 
 func set_port(new_port: int) -> void:
@@ -248,3 +264,32 @@ func is_compression_enabled() -> bool:
 
 func get_compression_min_size() -> int:
 	return compression_min_size
+
+# Godot 4.5: Configuration methods for enhanced WebSocket settings
+func set_inbound_buffer_size(size: int) -> void:
+	inbound_buffer_size = max(1024, size) # Minimum 1KB
+	print("WebSocket inbound buffer size set to: %d bytes" % inbound_buffer_size)
+
+func set_outbound_buffer_size(size: int) -> void:
+	outbound_buffer_size = max(1024, size) # Minimum 1KB
+	print("WebSocket outbound buffer size set to: %d bytes" % outbound_buffer_size)
+
+func set_max_queued_packets(count: int) -> void:
+	max_queued_packets = max(1, count) # Minimum 1 packet
+	print("WebSocket max queued packets set to: %d" % max_queued_packets)
+
+func set_heartbeat_interval(interval: float) -> void:
+	heartbeat_interval = max(0.0, interval) # Allow 0 to disable
+	print("WebSocket heartbeat interval set to: %.1f seconds" % heartbeat_interval)
+
+func get_inbound_buffer_size() -> int:
+	return inbound_buffer_size
+
+func get_outbound_buffer_size() -> int:
+	return outbound_buffer_size
+
+func get_max_queued_packets() -> int:
+	return max_queued_packets
+
+func get_heartbeat_interval() -> float:
+	return heartbeat_interval

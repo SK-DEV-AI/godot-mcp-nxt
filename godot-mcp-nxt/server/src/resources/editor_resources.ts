@@ -9,8 +9,8 @@ export const editorStateResource: Resource = {
   name: 'Godot Editor State',
   mimeType: 'application/json',
   async load() {
-    const godot = getGodotConnection();
-    
+    const godot = await getGodotConnection();
+
     try {
       // Call a command on the Godot side to get editor state
       const result = await godot.sendCommand('get_editor_state');
@@ -33,8 +33,8 @@ export const selectedNodeResource: Resource = {
   name: 'Godot Selected Node',
   mimeType: 'application/json',
   async load() {
-    const godot = getGodotConnection();
-    
+    const godot = await getGodotConnection();
+
     try {
       // Call a command on the Godot side to get selected node
       const result = await godot.sendCommand('get_selected_node');
@@ -57,8 +57,8 @@ export const currentScriptResource: Resource = {
   name: 'Current Script in Editor',
   mimeType: 'text/plain',
   async load() {
-    const godot = getGodotConnection();
-    
+    const godot = await getGodotConnection();
+
     try {
       // Call a command on the Godot side to get current script
       const result = await godot.sendCommand('get_current_script');

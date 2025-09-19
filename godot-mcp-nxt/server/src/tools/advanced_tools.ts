@@ -279,7 +279,7 @@ export const advancedTools: MCPTool[] = [
         throw new Error('Features must be an array of strings');
       }
 
-      const godot = getGodotConnection();
+      const godot = await getGodotConnection();
 
       try {
         const result = await godot.sendCommand<CommandResult>('generate_complete_scripts', {
@@ -331,7 +331,7 @@ export const advancedTools: MCPTool[] = [
       // Validate script path
       GodotMCPErrors.validateScriptPath(scriptPath, 'refactor_existing_code');
 
-      const godot = getGodotConnection();
+      const godot = await getGodotConnection();
 
       try {
         const result = await godot.sendCommand<CommandResult>('refactor_existing_code', {
@@ -381,7 +381,7 @@ export const advancedTools: MCPTool[] = [
         .describe('Preview changes without applying them')
     }),
     execute: async ({ projectPath, maxTextureSize = 2048, compression = 'auto', createAtlas = true, preview = false }: OptimizeTextureAtlasParams): Promise<string> => {
-      const godot = getGodotConnection();
+      const godot = await getGodotConnection();
 
       try {
         const result = await godot.sendCommand<CommandResult>('optimize_texture_atlas', {
@@ -428,7 +428,7 @@ export const advancedTools: MCPTool[] = [
         .describe('Output directory for organized files')
     }),
     execute: async ({ operation, audioFiles, targetFormat, quality, outputDir }: ManageAudioAssetsParams): Promise<string> => {
-      const godot = getGodotConnection();
+      const godot = await getGodotConnection();
 
       try {
         const result = await godot.sendCommand<CommandResult>('manage_audio_assets', {
@@ -502,7 +502,7 @@ export const advancedTools: MCPTool[] = [
         .describe('Level of project structure complexity')
     }),
     execute: async ({ templateType, projectName, features, structure = 'standard' }: ApplyProjectTemplateParams): Promise<string> => {
-      const godot = getGodotConnection();
+      const godot = await getGodotConnection();
 
       try {
         const result = await godot.sendCommand<CommandResult>('apply_project_template', {
@@ -558,7 +558,7 @@ export const advancedTools: MCPTool[] = [
         .describe('Preview changes without applying them')
     }),
     execute: async ({ projectPath, optimizationTypes, aggressive = false, preview = false }: AutomatedOptimizationParams): Promise<string> => {
-      const godot = getGodotConnection();
+      const godot = await getGodotConnection();
 
       try {
         const result = await godot.sendCommand<CommandResult>('automated_optimization', {
@@ -618,7 +618,7 @@ export const advancedTools: MCPTool[] = [
         .describe('Whether to create a demo scene with the character')
     }),
     execute: async ({ characterType, movementType, features, spritePath, createScene = true }: CreateCharacterSystemParams): Promise<string> => {
-      const godot = getGodotConnection();
+      const godot = await getGodotConnection();
 
       try {
         const result = await godot.sendCommand<CommandResult>('create_character_system', {
@@ -679,7 +679,7 @@ export const advancedTools: MCPTool[] = [
         .describe('Additional features to include (e.g. "enemies", "powerups", "traps")')
     }),
     execute: async ({ levelType, difficulty, theme, dimensions, features }: GenerateLevelParams): Promise<string> => {
-      const godot = getGodotConnection();
+      const godot = await getGodotConnection();
 
       try {
         const result = await godot.sendCommand<CommandResult>('generate_level', {
@@ -738,7 +738,7 @@ export const advancedTools: MCPTool[] = [
         .describe('Additional parameters for the suggestion')
     }),
     execute: async ({ suggestionType, target, autoApply = false, parameters }: ApplySmartSuggestionParams): Promise<string> => {
-      const godot = getGodotConnection();
+      const godot = await getGodotConnection();
 
       try {
         const result = await godot.sendCommand<CommandResult>('apply_smart_suggestion', {
@@ -788,7 +788,7 @@ export const advancedTools: MCPTool[] = [
       continueOnError: z.boolean().default(false)
     }),
     execute: async ({ operations, rollbackOnError = true, continueOnError = false }) => {
-      const godot = getGodotConnection();
+      const godot = await getGodotConnection();
       const results: any[] = [];
       const executedOperations: any[] = [];
 
@@ -848,7 +848,7 @@ export const advancedTools: MCPTool[] = [
       fixIssues: z.boolean().default(false)
     }),
     execute: async ({ projectPath, checkScripts = true, checkScenes = true, checkResources = true, fixIssues = false }) => {
-      const godot = getGodotConnection();
+      const godot = await getGodotConnection();
 
       try {
         GodotMCPErrors.logOperation('validate_project_structure', 'Starting project validation');
@@ -922,7 +922,7 @@ export const advancedTools: MCPTool[] = [
         .describe('Estimated development time in hours')
     }),
     execute: async (params: any): Promise<string> => {
-      const godot = getGodotConnection();
+      const godot = await getGodotConnection();
 
       try {
         const result = await godot.sendCommand<CommandResult>('game_development_workflow', {

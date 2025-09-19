@@ -20,7 +20,7 @@ export const advancedEditorTools: MCPTool[] = [
         .describe('Include stack trace in error responses')
     }),
     execute: async ({ script_code, timeout, capture_output, include_stack_trace }): Promise<string> => {
-      const godot = getGodotConnection();
+      const godot = await getGodotConnection();
 
       try {
         const result = await godot.sendCommand<CommandResult>('execute_editor_script', {
@@ -76,7 +76,7 @@ export const advancedEditorTools: MCPTool[] = [
         .describe('Keep the most recent messages (last 10 lines)')
     }),
     execute: async ({ clear_errors, clear_warnings, clear_info, preserve_recent }): Promise<string> => {
-      const godot = getGodotConnection();
+      const godot = await getGodotConnection();
 
       try {
         const result = await godot.sendCommand<CommandResult>('clear_output_logs', {
@@ -128,7 +128,7 @@ export const advancedEditorTools: MCPTool[] = [
         .describe('Optional regex pattern to search for in messages')
     }),
     execute: async ({ lines, filter_type, include_timestamps, search_pattern }): Promise<string> => {
-      const godot = getGodotConnection();
+      const godot = await getGodotConnection();
 
       try {
         const result = await godot.sendCommand<CommandResult>('get_editor_logs', {
@@ -199,7 +199,7 @@ export const advancedEditorTools: MCPTool[] = [
       include_ui,
       transparent_background
     }): Promise<string> => {
-      const godot = getGodotConnection();
+      const godot = await getGodotConnection();
 
       try {
         const result = await godot.sendCommand<CommandResult>('export_scene_screenshot', {
@@ -261,7 +261,7 @@ export const advancedEditorTools: MCPTool[] = [
       analyze_dependencies,
       generate_report
     }): Promise<string> => {
-      const godot = getGodotConnection();
+      const godot = await getGodotConnection();
 
       try {
         const result = await godot.sendCommand<CommandResult>('analyze_project_structure', {

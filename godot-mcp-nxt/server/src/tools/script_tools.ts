@@ -111,7 +111,7 @@ ERROR PREVENTION:
         .describe('Additional parameters for the operation')
     }),
     execute: async (params: any): Promise<string> => {
-      const godot = getGodotConnection();
+      const godot = await getGodotConnection();
 
       try {
         switch (params.operation) {

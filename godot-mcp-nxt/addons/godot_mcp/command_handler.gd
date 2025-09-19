@@ -79,9 +79,10 @@ func _handle_command(client_id: int, command: Dictionary) -> void:
 
 	# Fall back to existing command processors
 	var processor_found = false
+	var processor_names = ["Node", "Script", "Scene", "Project", "Editor", "EditorScript", "Advanced"]
 	for i in range(_command_processors.size()):
 		var processor = _command_processors[i]
-		var processor_name = processor.get_class() if processor.has_method("get_class") else "Unknown"
+		var processor_name = processor_names[i] if i < processor_names.size() else "Unknown"
 		print("Trying processor %d: %s" % [i, processor_name])
 
 		if processor.process_command(client_id, command_type, params, command_id):

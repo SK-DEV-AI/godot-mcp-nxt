@@ -1,0 +1,49 @@
+{
+  "mcpServers": {
+    "mcp.server.godot-mcp": {
+      "command": "npm",
+      "args": [
+        "start"
+      ],
+      "cwd": "/home/sk/godot-mcp-nxt/godot-mcp-nxt",
+      "env": {
+        "MCP_PORT": "9080"
+      },
+      "alwaysAllow": [
+        "node_manager",
+        "script_manager",
+        "scene_manager",
+        "project_manager",
+        "analyze_gdscript",
+        "compare_gdscripts",
+        "gdscript_metrics",
+        "performance_monitor",
+        "performance_profiler",
+        "error_analyzer",
+        "fuzzy_matcher",
+        "enhance_prompt",
+        "context_aware_assistant",
+        "generate_complete_scripts",
+        "refactor_existing_code",
+        "optimize_texture_atlas",
+        "manage_audio_assets",
+        "apply_project_template",
+        "automated_optimization",
+        "create_character_system",
+        "generate_level",
+        "apply_smart_suggestion",
+        "batch_operations",
+        "validate_project_structure",
+        "game_development_workflow",
+        "capture_editor_screenshot",
+        "capture_game_screenshot",
+        "get_screenshot_formats",
+        "execute_editor_script",
+        "clear_output_logs",
+        "get_editor_logs",
+        "export_scene_screenshot",
+        "analyze_project_structure"
+      ]
+    }
+  }
+}

@@ -273,10 +273,27 @@ func _run_project(client_id: int, params: Dictionary, command_id: String) -> voi
 		_send_error(client_id, "projectPath is required", command_id)
 		return
 
+	# Normalize project path - handle common mistakes
+	if project_path.begins_with("/home/") or project_path.begins_with("/Users/"):
+		# User provided absolute path - try to convert to relative or check if it's the current project
+		var current_project_path = ProjectSettings.globalize_path("res://").get_base_dir()
+		if project_path == current_project_path:
+			project_path = "."  # Use current directory
+		else:
+			_send_error(client_id, "Absolute paths are not supported. Use '.' for current project or relative paths. Current project is at: " + current_project_path, command_id)
+			return
+
+	# Handle "." as current directory
+	if project_path == ".":
+		project_path = ProjectSettings.globalize_path("res://").get_base_dir()
+
 	# Validate project exists
 	var project_file = project_path + "/project.godot"
 	if not FileAccess.file_exists(project_file):
-		_send_error(client_id, "Not a valid Godot project: " + project_path, command_id)
+		var suggestion = ""
+		if FileAccess.file_exists("res://project.godot"):
+			suggestion = " Did you mean '.' for the current project?"
+		_send_error(client_id, "Not a valid Godot project: " + project_path + ". Make sure project.godot exists." + suggestion, command_id)
 		return
 
 	# Build command arguments

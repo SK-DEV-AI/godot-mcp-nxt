@@ -35,9 +35,14 @@ func _create_node(client_id: int, params: Dictionary, command_id: String) -> voi
 	var node_type = params.get("node_type", "Node")
 	var node_name = params.get("node_name", "NewNode")
 
-	# Enhanced validation
-	if not _validate_node_path(parent_path):
-		return _send_error(client_id, "Invalid parent path format: %s" % parent_path, command_id)
+	# Enhanced validation with path sanitization
+	var path_validation = _sanitize_path(parent_path)
+	if not path_validation.valid:
+		return _send_godot_error(client_id, "Path validation", ERR_INVALID_PARAMETER, {
+			"path": parent_path,
+			"error": path_validation.error,
+			"operation": "validate_path"
+		}, command_id)
 
 	if not ClassDB.class_exists(node_type):
 		return _send_error(client_id, "Invalid node type: %s. Available types include: Node, Node2D, Sprite2D, Label, etc." % node_type, command_id)
@@ -163,13 +168,15 @@ func _update_node_property(client_id: int, params: Dictionary, command_id: Strin
 	if not node:
 		return _send_error(client_id, "Node not found: %s. Make sure the node exists and the path is correct." % node_path, command_id)
 
-	# Check if the property exists
+	# Check if the property exists with optimized property listing
 	if not property_name in node:
-		var available_props = []
-		for prop in node.get_property_list():
-			if not prop["name"].begins_with("_"):
-				available_props.append(prop["name"])
-		return _send_error(client_id, "Property '%s' does not exist on node %s. Available properties: %s" % [property_name, node_path, available_props], command_id)
+		var available_props = _get_public_properties(node)
+		var suggestion = _suggest_property_name(node, property_name)
+		var error_msg = "Property '%s' does not exist on node %s" % [property_name, node_path]
+		if suggestion:
+			error_msg += ". Did you mean '%s'?" % suggestion
+		error_msg += ". Available properties: %s" % available_props
+		return _send_error(client_id, error_msg, command_id)
 
 	# Parse property value for Godot types
 	var parsed_value = _parse_property_value(property_value)
@@ -248,14 +255,8 @@ func _list_nodes(client_id: int, params: Dictionary, command_id: String) -> void
 	if not parent:
 		return _send_error(client_id, "Parent node not found: %s" % parent_path, command_id)
 	
-	# Get children
-	var children = []
-	for child in parent.get_children():
-		children.append({
-			"name": child.name,
-			"type": child.get_class(),
-			"path": str(child.get_path()).replace(str(parent.get_path()), parent_path)
-		})
+	# Get children with optimized performance
+	var children = _get_children_info(parent, parent_path)
 	
 	_send_success(client_id, {
 		"parent_path": parent_path,
@@ -314,7 +315,7 @@ func _create_shape_resource(client_id: int, params: Dictionary, command_id: Stri
 	var resource_id = "shape_" + str(Time.get_unix_time_from_system() * 1000).replace(".", "_")
 
 	# Store the resource for later assignment
-	_store_resource(resource_id, shape)
+	_store_resource_with_timestamp(resource_id, shape)
 
 	_send_success(client_id, {
 		"resourceId": resource_id,
@@ -378,7 +379,7 @@ func _create_mesh_resource(client_id: int, params: Dictionary, command_id: Strin
 	var resource_id = "mesh_" + str(Time.get_unix_time_from_system() * 1000).replace(".", "_")
 
 	# Store the resource for later assignment
-	_store_resource(resource_id, mesh)
+	_store_resource_with_timestamp(resource_id, mesh)
 
 	_send_success(client_id, {
 		"resourceId": resource_id,
@@ -460,3 +461,65 @@ func _store_resource(resource_id: String, resource: Resource) -> void:
 
 func _get_stored_resource(resource_id: String) -> Resource:
 	return _stored_resources.get(resource_id, null)
+
+# Optimized helper function for getting public properties
+func _get_public_properties(node: Node) -> Array:
+	var public_props = []
+	var property_list = node.get_property_list()
+
+	# Pre-allocate array size for better performance
+	public_props.resize(property_list.size())
+	var public_count = 0
+
+	for prop in property_list:
+		var name = prop["name"]
+		if not name.begins_with("_"):
+			public_props[public_count] = name
+			public_count += 1
+
+	# Trim array to actual size
+	public_props.resize(public_count)
+	return public_props
+
+# Optimized helper function for getting children info
+func _get_children_info(parent: Node, parent_path: String) -> Array:
+	var children = []
+	var child_nodes = parent.get_children()
+
+	# Pre-allocate array for better performance
+	children.resize(child_nodes.size())
+
+	for i in range(child_nodes.size()):
+		var child = child_nodes[i]
+		children[i] = {
+			"name": child.name,
+			"type": child.get_class(),
+			"path": parent_path + "/" + child.name
+		}
+
+	return children
+
+# Resource cleanup to prevent memory leaks
+func _cleanup_expired_resources() -> void:
+	var current_time = Time.get_ticks_msec()
+	var to_remove = []
+
+	# Find expired resources (older than 30 minutes)
+	for resource_id in _stored_resources:
+		var resource = _stored_resources[resource_id]
+		if resource and resource.has_meta("_creation_time"):
+			var creation_time = resource.get_meta("_creation_time")
+			if current_time - creation_time > 1800000: # 30 minutes
+				to_remove.append(resource_id)
+
+	# Remove expired resources
+	for resource_id in to_remove:
+		_stored_resources.erase(resource_id)
+
+	if to_remove.size() > 0:
+		print("Cleaned up %d expired resources" % to_remove.size())
+
+# Mark resource creation time for cleanup
+func _store_resource_with_timestamp(resource_id: String, resource: Resource) -> void:
+	resource.set_meta("_creation_time", Time.get_ticks_msec())
+	_stored_resources[resource_id] = resource

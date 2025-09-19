@@ -11,8 +11,8 @@ import { promptEnhancementTools } from './tools/prompt_enhancement_tools.js';
 import { advancedTools } from './tools/advanced_tools.js';
 import { screenshotTools } from './tools/screenshot_tools.js';
 import { advancedEditorTools } from './tools/advanced_editor_tools.js';
-import { getGodotConnection } from './utils/godot_connection.js';
-import { setupCacheCleanup } from './utils/cache.js';
+import { getGodotConnection, getGodotConnectionSync } from './utils/godot_connection.js';
+import { startCacheCleanup } from './utils/cache.js';
 import { globalToolRegistry } from './utils/tool_registry.js';
 
 // Import resources
@@ -127,7 +127,7 @@ async function main() {
   // Note: WebSocket connection is lazy - only established when WebSocket tools are called
 
   // Set up cache cleanup
-  setupCacheCleanup();
+  startCacheCleanup();
 
   // Start the server
   server.start({
@@ -139,8 +139,12 @@ async function main() {
   // Handle cleanup
   const cleanup = () => {
     console.error('Shutting down Godot MCP server...');
-    const godot = getGodotConnection();
-    godot.disconnect();
+    try {
+      const godot = getGodotConnectionSync();
+      godot.disconnect();
+    } catch (error) {
+      console.error('Error during cleanup:', error);
+    }
     process.exit(0);
   };
 

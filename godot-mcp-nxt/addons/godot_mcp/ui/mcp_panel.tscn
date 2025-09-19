@@ -1,6 +1,30 @@
-[gd_scene load_steps=2 format=3 uid="uid://c2kuk5yuiage8"]
+[gd_scene load_steps=4 format=3 uid="uid://c2kuk5yuiage8"]
 
 [ext_resource type="Script" path="res://addons/godot_mcp/ui/mcp_panel.gd" id="1_3cbiu"]
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_1"]
+bg_color = Color(0.1, 0.1, 0.15, 1)
+border_width_left = 1
+border_width_top = 1
+border_width_right = 1
+border_width_bottom = 1
+border_color = Color(0.3, 0.3, 0.4, 1)
+corner_radius_top_left = 4
+corner_radius_top_right = 4
+corner_radius_bottom_right = 4
+corner_radius_bottom_left = 4
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_2"]
+bg_color = Color(0.08, 0.08, 0.12, 1)
+border_width_left = 1
+border_width_top = 1
+border_width_right = 1
+border_width_bottom = 1
+border_color = Color(0.25, 0.25, 0.35, 1)
+corner_radius_top_left = 6
+corner_radius_top_right = 6
+corner_radius_bottom_right = 6
+corner_radius_bottom_left = 6
 
 [node name="MCPPanel" type="Control"]
 layout_mode = 3
@@ -18,89 +42,166 @@ anchor_right = 1.0
 anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
+theme_override_constants/separation = 12
 
-[node name="TitleLabel" type="Label" parent="VBoxContainer"]
+[node name="HeaderContainer" type="HBoxContainer" parent="VBoxContainer"]
 layout_mode = 2
+
+[node name="TitleLabel" type="Label" parent="VBoxContainer/HeaderContainer"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_font_sizes/font_size = 16
 text = "Godot MCP Server"
 horizontal_alignment = 1
 
-[node name="HSeparator" type="HSeparator" parent="VBoxContainer"]
+[node name="StatusBadge" type="PanelContainer" parent="VBoxContainer/HeaderContainer"]
+custom_minimum_size = Vector2(120, 28)
 layout_mode = 2
+theme_override_styles/panel = SubResource("StyleBoxFlat_1")
 
-[node name="StatusContainer" type="HBoxContainer" parent="VBoxContainer"]
+[node name="StatusLabel" type="Label" parent="VBoxContainer/HeaderContainer/StatusBadge"]
 layout_mode = 2
+theme_override_colors/font_color = Color(0.2, 0.8, 0.2, 1)
+theme_override_font_sizes/font_size = 12
+text = "Running (Auto)"
+horizontal_alignment = 1
+vertical_alignment = 1
 
-[node name="Label" type="Label" parent="VBoxContainer/StatusContainer"]
+[node name="MainContainer" type="HBoxContainer" parent="VBoxContainer"]
 layout_mode = 2
-text = "Status:"
+size_flags_vertical = 3
+theme_override_constants/separation = 16
 
-[node name="StatusLabel" type="Label" parent="VBoxContainer/StatusContainer"]
+[node name="LeftPanel" type="VBoxContainer" parent="VBoxContainer/MainContainer"]
 layout_mode = 2
 size_flags_horizontal = 3
-text = "Server: Stopped"
+theme_override_constants/separation = 8
 
-[node name="PortContainer" type="HBoxContainer" parent="VBoxContainer"]
+[node name="QuickStats" type="PanelContainer" parent="VBoxContainer/MainContainer/LeftPanel"]
 layout_mode = 2
+theme_override_styles/panel = SubResource("StyleBoxFlat_2")
 
-[node name="Label" type="Label" parent="VBoxContainer/PortContainer"]
+[node name="StatsGrid" type="GridContainer" parent="VBoxContainer/MainContainer/LeftPanel/QuickStats"]
+layout_mode = 2
+columns = 2
+theme_override_constants/h_separation = 12
+theme_override_constants/v_separation = 4
+
+[node name="PortLabel" type="Label" parent="VBoxContainer/MainContainer/LeftPanel/QuickStats/StatsGrid"]
 layout_mode = 2
 text = "Port:"
 
-[node name="PortSpinBox" type="SpinBox" parent="VBoxContainer/PortContainer"]
+[node name="PortSpinBox" type="SpinBox" parent="VBoxContainer/MainContainer/LeftPanel/QuickStats/StatsGrid"]
+custom_minimum_size = Vector2(80, 0)
 layout_mode = 2
-size_flags_horizontal = 3
 min_value = 1.0
 max_value = 65535.0
 value = 9080.0
 
-[node name="ButtonsContainer" type="HBoxContainer" parent="VBoxContainer"]
+[node name="ClientsLabel" type="Label" parent="VBoxContainer/MainContainer/LeftPanel/QuickStats/StatsGrid"]
 layout_mode = 2
+text = "Clients:"
 
-[node name="StartButton" type="Button" parent="VBoxContainer/ButtonsContainer"]
-layout_mode = 2
-size_flags_horizontal = 3
-text = "Start Server"
-
-[node name="StopButton" type="Button" parent="VBoxContainer/ButtonsContainer"]
-layout_mode = 2
-size_flags_horizontal = 3
-disabled = true
-text = "Stop Server"
-
-[node name="ConnectionsContainer" type="HBoxContainer" parent="VBoxContainer"]
-layout_mode = 2
-
-[node name="Label" type="Label" parent="VBoxContainer/ConnectionsContainer"]
-layout_mode = 2
-text = "Connected Clients:"
-
-[node name="CountLabel" type="Label" parent="VBoxContainer/ConnectionsContainer"]
+[node name="CountLabel" type="Label" parent="VBoxContainer/MainContainer/LeftPanel/QuickStats/StatsGrid"]
 layout_mode = 2
 text = "0"
 
-[node name="HSeparator2" type="HSeparator" parent="VBoxContainer"]
-layout_mode = 2
-
-[node name="TabContainer" type="TabContainer" parent="VBoxContainer"]
+[node name="TabContainer" type="TabContainer" parent="VBoxContainer/MainContainer/LeftPanel"]
 layout_mode = 2
 size_flags_vertical = 3
 
-[node name="Server" type="VBoxContainer" parent="VBoxContainer/TabContainer"]
+[node name="Server" type="VBoxContainer" parent="VBoxContainer/MainContainer/LeftPanel/TabContainer"]
 layout_mode = 2
+theme_override_constants/separation = 8
 
-[node name="LogLabel" type="Label" parent="VBoxContainer/TabContainer/Server"]
+[node name="LogLabel" type="Label" parent="VBoxContainer/MainContainer/LeftPanel/TabContainer/Server"]
 layout_mode = 2
-text = "Server Log:"
+theme_override_font_sizes/font_size = 14
+theme_override_colors/font_color = Color(0.8, 0.8, 0.9, 1)
+text = "Activity Log"
 
-[node name="LogContainer" type="VBoxContainer" parent="VBoxContainer/TabContainer/Server"]
+[node name="LogText" type="TextEdit" parent="VBoxContainer/MainContainer/LeftPanel/TabContainer/Server"]
 layout_mode = 2
 size_flags_vertical = 3
-
-[node name="LogText" type="TextEdit" parent="VBoxContainer/TabContainer/Server/LogContainer"]
-layout_mode = 2
-size_flags_vertical = 3
+theme_override_colors/font_color = Color(0.9, 0.9, 0.95, 1)
+theme_override_colors/background_color = Color(0.05, 0.05, 0.08, 1)
 editable = false
 wrap_mode = 1
 
-[node name="Performance" type="VBoxContainer" parent="VBoxContainer/TabContainer"]
+[node name="Settings" type="ScrollContainer" parent="VBoxContainer/MainContainer/LeftPanel/TabContainer"]
+layout_mode = 2
+
+[node name="SettingsContainer" type="VBoxContainer" parent="VBoxContainer/MainContainer/LeftPanel/TabContainer/Settings"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_constants/separation = 12
+
+[node name="GeneralGroup" type="VBoxContainer" parent="VBoxContainer/MainContainer/LeftPanel/TabContainer/Settings/SettingsContainer"]
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="GeneralLabel" type="Label" parent="VBoxContainer/MainContainer/LeftPanel/TabContainer/Settings/SettingsContainer/GeneralGroup"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 14
+theme_override_colors/font_color = Color(0.8, 0.8, 0.9, 1)
+text = "General Settings"
+
+[node name="AutoStartCheck" type="CheckBox" parent="VBoxContainer/MainContainer/LeftPanel/TabContainer/Settings/SettingsContainer/GeneralGroup"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 13
+text = "Auto-start server when Godot opens"
+
+[node name="DebugModeCheck" type="CheckBox" parent="VBoxContainer/MainContainer/LeftPanel/TabContainer/Settings/SettingsContainer/GeneralGroup"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 13
+text = "Enable debug logging"
+
+[node name="HSeparator" type="HSeparator" parent="VBoxContainer/MainContainer/LeftPanel/TabContainer/Settings/SettingsContainer"]
+layout_mode = 2
+
+[node name="SecurityGroup" type="VBoxContainer" parent="VBoxContainer/MainContainer/LeftPanel/TabContainer/Settings/SettingsContainer"]
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="SecurityLabel" type="Label" parent="VBoxContainer/MainContainer/LeftPanel/TabContainer/Settings/SettingsContainer/SecurityGroup"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 14
+theme_override_colors/font_color = Color(0.8, 0.8, 0.9, 1)
+text = "Security & Performance"
+
+[node name="RateLimitContainer" type="HBoxContainer" parent="VBoxContainer/MainContainer/LeftPanel/TabContainer/Settings/SettingsContainer/SecurityGroup"]
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="RateLimitLabel" type="Label" parent="VBoxContainer/MainContainer/LeftPanel/TabContainer/Settings/SettingsContainer/SecurityGroup/RateLimitContainer"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_font_sizes/font_size = 13
+text = "Rate Limit (req/sec):"
+
+[node name="RateLimitSpinBox" type="SpinBox" parent="VBoxContainer/MainContainer/LeftPanel/TabContainer/Settings/SettingsContainer/SecurityGroup/RateLimitContainer"]
+layout_mode = 2
+min_value = 10.0
+max_value = 1000.0
+value = 100.0
+
+[node name="AuditLogCheck" type="CheckBox" parent="VBoxContainer/MainContainer/LeftPanel/TabContainer/Settings/SettingsContainer/SecurityGroup"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 13
+text = "Enable audit logging"
+
+[node name="HSeparator2" type="HSeparator" parent="VBoxContainer/MainContainer/LeftPanel/TabContainer/Settings/SettingsContainer"]
+layout_mode = 2
+
+[node name="ActionsGroup" type="VBoxContainer" parent="VBoxContainer/MainContainer/LeftPanel/TabContainer/Settings/SettingsContainer"]
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="SaveButton" type="Button" parent="VBoxContainer/MainContainer/LeftPanel/TabContainer/Settings/SettingsContainer/ActionsGroup"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_font_sizes/font_size = 13
+text = "Save Configuration"
+
+[node name="Performance" type="VBoxContainer" parent="VBoxContainer/MainContainer/LeftPanel/TabContainer"]
 layout_mode = 2

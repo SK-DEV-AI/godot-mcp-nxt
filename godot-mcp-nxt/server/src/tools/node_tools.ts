@@ -187,7 +187,7 @@ ERROR PREVENTION:
         .describe('Whether to preview changes without applying them')
     }),
     execute: async (params: any): Promise<string> => {
-      const godot = getGodotConnection();
+      const godot = await getGodotConnection();
 
       try {
         switch (params.operation) {

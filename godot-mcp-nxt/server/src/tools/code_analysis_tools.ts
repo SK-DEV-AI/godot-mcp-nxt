@@ -15,7 +15,7 @@ export const analyzeScriptTool: MCPTool = {
     check_style: z.boolean().optional().default(true).describe('Check for style guide violations'),
   }),
   execute: async ({ script_path, include_highlighting, check_style }) => {
-    const godot = getGodotConnection();
+    const godot = await getGodotConnection();
 
     try {
       // Get script content first
@@ -65,7 +65,7 @@ export const compareScriptsTool: MCPTool = {
     include_line_numbers: z.boolean().optional().default(true).describe('Include line numbers in comparison'),
   }),
   execute: async ({ script_path_a, script_path_b, include_line_numbers }) => {
-    const godot = getGodotConnection();
+    const godot = await getGodotConnection();
 
     try {
       // Get both scripts
@@ -112,7 +112,7 @@ export const codeMetricsTool: MCPTool = {
     include_complexity: z.boolean().optional().default(true).describe('Calculate cyclomatic complexity'),
   }),
   execute: async ({ script_path, include_complexity }) => {
-    const godot = getGodotConnection();
+    const godot = await getGodotConnection();
 
     try {
       const result = await godot.sendCommand('get_script', {

@@ -126,7 +126,7 @@ ERROR PREVENTION:
         .describe('Whether to automatically save after operations')
     }),
     execute: async (params: any): Promise<string> => {
-      const godot = getGodotConnection();
+      const godot = await getGodotConnection();
 
       try {
         switch (params.operation) {

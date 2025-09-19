@@ -10,7 +10,7 @@ export const sceneListResource: Resource = {
   name: 'Godot Scene List',
   mimeType: 'application/json',
   async load() {
-    const godot = getGodotConnection();
+    const godot = await getGodotConnection();
 
     try {
       // Call a command on the Godot side to list all scenes
@@ -56,7 +56,7 @@ export const sceneStructureTemplate: ResourceTemplate = {
     },
   ],
   async load(args) {
-    const godot = getGodotConnection();
+    const godot = await getGodotConnection();
 
     try {
       // Call the Godot command to get scene structure
@@ -82,7 +82,7 @@ export const currentSceneStructureResource: Resource = {
     name: 'Godot Current Scene Structure',
     mimeType: 'application/json',
     async load() {
-        const godot = getGodotConnection();
+        const godot = await getGodotConnection();
 
         try {
             // Call a command on the Godot side to get current scene structure

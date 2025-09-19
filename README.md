@@ -22,11 +22,19 @@ Godot MCP Server is a sophisticated integration that bridges the Godot game engi
 - **Smart Error Recovery**: Automatic error analysis and recovery suggestions
 - **Performance Optimization**: AI-guided performance improvements
 
+### 🎛️ **Integrated Godot Editor UI**
+- **MCP Server Panel**: Dedicated bottom panel in Godot editor
+- **One-Click Server Control**: Start/stop/configure server directly in editor
+- **Real-Time Status Display**: Live connection counts and server status
+- **Configuration Persistence**: Save port settings and auto-start preferences
+- **Visual Notifications**: In-editor alerts for server events and errors
+
 ### 📊 Real-Time Performance Monitoring
 - **Live Performance Dashboard**: Real-time metrics in Godot editor
 - **Performance Profiling**: Frame-by-frame analysis and bottleneck detection
 - **Custom Metrics**: Project-specific performance monitoring
 - **Alert System**: Configurable performance thresholds and notifications
+- **Server Metrics Integration**: Display MCP server performance data
 
 ### 🔧 Advanced Development Tools
 - **Intelligent Node Management**: Context-aware node creation and manipulation
@@ -59,7 +67,10 @@ Godot MCP Server is a sophisticated integration that bridges the Godot game engi
 │  ┌─────────────────────────────────────────────────────┐    │
 │  │           Godot Editor Integration (Addon)          │    │
 │  │                                                     │    │
-│  │ • MCP Panel UI with Performance & Error tabs       │    │
+│  │ • Integrated MCP Server Panel in bottom panel      │    │
+│  │ • One-click server control (start/stop/configure)  │    │
+│  │ • Real-time performance monitoring dashboard       │    │
+│  │ • Configuration persistence and auto-start         │    │
 │  │ • WebSocket server for direct API communication    │    │
 │  │ • Command processors with native Godot API access  │    │
 │  │ • Editor interface integration and hooks           │    │
@@ -122,9 +133,18 @@ Godot MCP Server is a sophisticated integration that bridges the Godot game engi
 ### Basic Usage
 
 1. **Open your Godot project** with the MCP addon enabled
-2. **Start the MCP server** using `npm start`
-3. **Connect MCP-compatible applications** (Claude Code, VS Code with MCP extension, etc.)
-4. **Use AI assistance** for Godot development tasks
+   - The MCP Server panel will appear in the bottom panel automatically
+2. **Configure server settings** (optional):
+   - Set port number (default: 9080)
+   - Enable auto-start if desired
+   - Save configuration
+3. **Start the MCP server** using the "Start Server" button in the UI, or run `npm start` from terminal
+4. **Monitor server status** in the integrated UI:
+   - View real-time connection count
+   - Monitor performance metrics
+   - Check server logs
+5. **Connect MCP-compatible applications** (Claude Code, VS Code with MCP extension, etc.)
+6. **Use AI assistance** for Godot development tasks
 
 ## 📚 Documentation
 

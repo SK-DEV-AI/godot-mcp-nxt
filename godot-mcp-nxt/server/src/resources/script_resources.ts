@@ -18,7 +18,7 @@ export const scriptContentTemplate: ResourceTemplate = {
     },
   ],
   async load(args) {
-    const godot = getGodotConnection();
+    const godot = await getGodotConnection();
 
     try {
       // Call the Godot command to get script content
@@ -49,7 +49,7 @@ export const currentScriptContentResource: Resource = {
     name: 'Godot Current Script Content',
     mimeType: 'text/plain',
     async load() {
-        const godot = getGodotConnection();
+        const godot = await getGodotConnection();
 
         try {
             const result = await godot.sendCommand('get_current_script', {});
@@ -86,7 +86,7 @@ export const scriptListResource: Resource = {
   name: 'Godot Script List',
   mimeType: 'application/json',
   async load() {
-    const godot = getGodotConnection();
+    const godot = await getGodotConnection();
     
     try {
       // Call a command on the Godot side to list all scripts
@@ -128,7 +128,7 @@ export const scriptMetadataResource: Resource = {
     name: 'Godot Script Metadata',
     mimeType: 'application/json',
     async load() {
-        const godot = getGodotConnection();
+        const godot = await getGodotConnection();
         
         // Use a fixed script path
         let scriptPath = 'res://default_script.gd';

@@ -188,7 +188,7 @@ export class DynamicPromptManager {
 
     // Get additional context from Godot
     try {
-      const godot = getGodotConnection();
+      const godot = await getGodotConnection();
       const contextResult = await godot.sendCommand<CommandResult>('get_prompt_context', {});
 
       if (contextResult.result?.performanceMetrics) {
@@ -278,7 +278,7 @@ export class DynamicPromptManager {
     const suggestions: PromptSuggestion[] = [];
 
     try {
-      const godot = getGodotConnection();
+      const godot = await getGodotConnection();
       const projectResult = await godot.sendCommand<CommandResult>('get_project_context', {});
 
       if (projectResult.result?.projectType) {

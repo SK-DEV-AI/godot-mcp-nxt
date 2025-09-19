@@ -336,7 +336,7 @@ export class EnhancedErrorHandler {
   private async identifyRootCause(error: ErrorContext): Promise<string> {
     // Use Godot connection to get additional context
     try {
-      const godot = getGodotConnection();
+      const godot = await getGodotConnection();
       const contextResult = await godot.sendCommand<CommandResult>('get_error_context', {
         error: error
       });
@@ -455,7 +455,7 @@ export class EnhancedErrorHandler {
     error: ErrorContext
   ): Promise<RecoveryResult> {
     try {
-      const godot = getGodotConnection();
+      const godot = await getGodotConnection();
 
       const result = await godot.sendCommand<CommandResult>('apply_error_recovery', {
         strategy: suggestion.strategy.name,

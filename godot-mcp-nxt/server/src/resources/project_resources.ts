@@ -9,8 +9,8 @@ export const projectStructureResource: Resource = {
   name: 'Godot Project Structure',
   mimeType: 'application/json',
   async load() {
-    const godot = getGodotConnection();
-    
+    const godot = await getGodotConnection();
+
     try {
       // Call a command on the Godot side to get project structure
       const result = await godot.sendCommand('get_project_structure');
@@ -33,8 +33,8 @@ export const projectSettingsResource: Resource = {
   name: 'Godot Project Settings',
   mimeType: 'application/json',
   async load() {
-    const godot = getGodotConnection();
-    
+    const godot = await getGodotConnection();
+
     try {
       // Call a command on the Godot side to get project settings
       const result = await godot.sendCommand('get_project_settings');
@@ -57,7 +57,7 @@ export const projectResourcesResource: Resource = {
   name: 'Godot Project Resources',
   mimeType: 'application/json',
   async load() {
-    const godot = getGodotConnection();
+    const godot = await getGodotConnection();
 
     try {
       // Call a command on the Godot side to get a list of all resources
@@ -90,7 +90,7 @@ export const projectFilesByTypeTemplate: ResourceTemplate = {
     },
   ],
   async load(args) {
-    const godot = getGodotConnection();
+    const godot = await getGodotConnection();
 
     try {
       // Get all project resources

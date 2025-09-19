@@ -73,13 +73,16 @@ PERFORMANCE ANALYSIS FEATURES:
         .describe('Specific area to focus optimization suggestions on')
     }),
     execute: async (params: any): Promise<string> => {
-      const godot = getGodotConnection();
+      const godot = await getGodotConnection();
 
       try {
         switch (params.operation) {
           case 'get_metrics': {
             const result = await godot.sendCommand<CommandResult>('get_performance_metrics', {});
-            return formatPerformanceMetrics(result.metrics);
+            if (!result) {
+              throw new Error('No result received from get_performance_metrics');
+            }
+            return formatPerformanceMetrics(result);
           }
 
           case 'analyze_performance': {
@@ -168,7 +171,7 @@ EXAMPLES:
         .describe('Specific area to focus analysis on')
     }),
     execute: async (params: any): Promise<string> => {
-      const godot = getGodotConnection();
+      const godot = await getGodotConnection();
 
       try {
         switch (params.operation) {

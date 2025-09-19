@@ -59,33 +59,26 @@ export class GodotConnection {
       return new Promise<void>((resolve, reject) => {
         console.error(`Connecting to Godot WebSocket server at ${this.url}... (Attempt ${retries + 1}/${this.maxRetries + 1})`);
         
-        // Use protocol option to match Godot's supported_protocols
-        this.ws = new WebSocket(this.url, {
-          protocol: 'json',
-          handshakeTimeout: 8000,  // Increase handshake timeout
-          perMessageDeflate: false // Disable compression for compatibility
-        });
-        
+        this.ws = new WebSocket(this.url);
+
         this.ws.on('open', () => {
           this.connected = true;
-          console.error('Connected to Godot WebSocket server');
           resolve();
         });
-        
+
         this.ws.on('message', (data: Buffer) => {
           try {
             const response: GodotResponse = JSON.parse(data.toString());
-            console.error('Received response:', response);
-            
+
             // Handle command responses
             if ('commandId' in response) {
               const commandId = response.commandId as string;
               const pendingCommand = this.commandQueue.get(commandId);
-              
+
               if (pendingCommand) {
                 clearTimeout(pendingCommand.timeout);
                 this.commandQueue.delete(commandId);
-                
+
                 if (response.status === 'success') {
                   pendingCommand.resolve(response.result);
                 } else {
@@ -97,21 +90,20 @@ export class GodotConnection {
             console.error('Error parsing response:', error);
           }
         });
-        
+
         this.ws.on('error', (error) => {
-          const err = error as Error;
-          console.error('WebSocket error:', err);
+          console.error('WebSocket error:', error);
           // Don't terminate the connection on error - let the timeout handle it
           // Just log the error and allow retry mechanism to work
         });
-        
+
         this.ws.on('close', () => {
           if (this.connected) {
             console.error('Disconnected from Godot WebSocket server');
             this.connected = false;
           }
         });
-        
+
         // Set connection timeout
         const connectionTimeout = setTimeout(() => {
           if (this.ws?.readyState !== WebSocket.OPEN) {
@@ -122,7 +114,7 @@ export class GodotConnection {
             reject(new Error('Connection timeout'));
           }
         }, this.timeout);
-        
+
         this.ws.on('open', () => {
           clearTimeout(connectionTimeout);
         });
@@ -223,13 +215,147 @@ export class GodotConnection {
   }
 }
 
-// Singleton instance
+// Connection Pool for managing multiple Godot connections
+export class ConnectionPool {
+  private pool = new Map<string, GodotConnection>();
+  private activeConnections = 0;
+  private maxConnections = 5;
+  private connectionTimeouts = new Map<string, NodeJS.Timeout>();
+
+  constructor(maxConnections = 5) {
+    this.maxConnections = maxConnections;
+  }
+
+  async getConnection(url: string = 'ws://localhost:9080'): Promise<GodotConnection> {
+    // Check if we already have a connection for this URL
+    if (this.pool.has(url)) {
+      const connection = this.pool.get(url)!;
+      if (connection.isConnected()) {
+        console.log(`Reusing existing connection for ${url}`);
+        return connection;
+      }
+      // Remove stale connection
+      this.pool.delete(url);
+      this.activeConnections--;
+    }
+
+    // Check connection limit
+    if (this.activeConnections >= this.maxConnections) {
+      throw new Error(`Connection pool exhausted (max: ${this.maxConnections})`);
+    }
+
+    // Create new connection
+    console.log(`Creating new connection for ${url}`);
+    const connection = new GodotConnection(url);
+    await connection.connect();
+
+    this.pool.set(url, connection);
+    this.activeConnections++;
+
+    // Set up automatic cleanup on disconnect
+    const cleanupTimeout = setTimeout(() => {
+      if (this.pool.has(url) && !this.pool.get(url)!.isConnected()) {
+        this.releaseConnection(url);
+      }
+    }, 30000); // 30 seconds
+
+    this.connectionTimeouts.set(url, cleanupTimeout);
+
+    return connection;
+  }
+
+  releaseConnection(url: string): void {
+    if (this.pool.has(url)) {
+      const connection = this.pool.get(url)!;
+      if (!connection.isConnected()) {
+        console.log(`Cleaning up disconnected connection for ${url}`);
+        this.pool.delete(url);
+        this.activeConnections--;
+
+        // Clear cleanup timeout
+        const timeout = this.connectionTimeouts.get(url);
+        if (timeout) {
+          clearTimeout(timeout);
+          this.connectionTimeouts.delete(url);
+        }
+      }
+    }
+  }
+
+  getStats(): {
+    activeConnections: number;
+    totalConnections: number;
+    maxConnections: number;
+  } {
+    return {
+      activeConnections: this.activeConnections,
+      totalConnections: this.pool.size,
+      maxConnections: this.maxConnections
+    };
+  }
+
+  async closeAll(): Promise<void> {
+    console.log('Closing all connections in pool...');
+
+    // Clear all timeouts
+    for (const timeout of this.connectionTimeouts.values()) {
+      clearTimeout(timeout);
+    }
+    this.connectionTimeouts.clear();
+
+    // Close all connections
+    const closePromises = Array.from(this.pool.values()).map(async (connection) => {
+      try {
+        connection.disconnect();
+      } catch (error) {
+        console.error('Error closing connection:', error);
+      }
+    });
+
+    await Promise.all(closePromises);
+    this.pool.clear();
+    this.activeConnections = 0;
+
+    console.log('All connections closed');
+  }
+}
+
+// Global connection pool instance
+let globalConnectionPool: ConnectionPool | null = null;
+
+/**
+ * Gets the global connection pool instance
+ */
+export function getConnectionPool(): ConnectionPool {
+  if (!globalConnectionPool) {
+    globalConnectionPool = new ConnectionPool();
+  }
+  return globalConnectionPool;
+}
+
+/**
+ * Gets a Godot connection from the pool (legacy compatibility)
+ */
+export async function getGodotConnection(): Promise<GodotConnection> {
+  const pool = getConnectionPool();
+  return pool.getConnection();
+}
+
+/**
+ * Synchronous wrapper for backward compatibility
+ * Note: This will create a new connection each time - use getGodotConnection() for pooling
+ */
+export function getGodotConnectionSync(): GodotConnection {
+  return new GodotConnection();
+}
+
+// Singleton instance for backward compatibility
 let connectionInstance: GodotConnection | null = null;
 
 /**
- * Gets the singleton instance of GodotConnection
+ * Gets the singleton instance of GodotConnection (deprecated - use pool instead)
  */
-export function getGodotConnection(): GodotConnection {
+export function getLegacyGodotConnection(): GodotConnection {
   if (!connectionInstance) {
     connectionInstance = new GodotConnection();
   }

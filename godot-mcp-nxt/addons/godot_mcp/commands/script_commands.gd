@@ -53,7 +53,10 @@ func _create_script(client_id: int, params: Dictionary, command_id: String) -> v
 	if not DirAccess.dir_exists_absolute(dir):
 		var err = DirAccess.make_dir_recursive_absolute(dir)
 		if err != OK:
-			return _send_error(client_id, "Failed to create directory: %s (Error code: %d)" % [dir, err], command_id)
+			return _send_godot_error(client_id, "Directory creation", err, {
+				"path": dir,
+				"operation": "create_directory"
+			}, command_id)
 	
 	# Create the script file
 	var file = FileAccess.open(script_path, FileAccess.WRITE)
@@ -179,76 +182,25 @@ func _get_script(client_id: int, params: Dictionary, command_id: String) -> void
 
 func _get_script_metadata(client_id: int, params: Dictionary, command_id: String) -> void:
 	var path = params.get("path", "")
-	
+
 	# Validation
 	if path.is_empty():
 		return _send_error(client_id, "Script path cannot be empty", command_id)
-	
-	if not path.begins_with("res://"):
-		path = "res://" + path
-	
-	if not FileAccess.file_exists(path):
-		return _send_error(client_id, "Script file not found: " + path, command_id)
-	
-	# Load the script
-	var script = load(path)
+
+	# Validate and normalize path
+	var validation_result = _validate_script_path(path)
+	if not validation_result.valid:
+		return _send_error(client_id, validation_result.error, command_id)
+
+	path = validation_result.path
+
+	# Load and validate script
+	var script = _load_script_resource(path)
 	if not script:
 		return _send_error(client_id, "Failed to load script: " + path, command_id)
-	
-	# Extract script metadata
-	var metadata = {
-		"path": path,
-		"language": "gdscript" if path.ends_with(".gd") else "csharp" if path.ends_with(".cs") else "unknown"
-	}
-	
-	# Attempt to get script class info
-	var class_name_str = ""
-	var extends_class = ""
-	
-	# Read the file to extract class_name and extends info
-	var file = FileAccess.open(path, FileAccess.READ)
-	if file:
-		var content = file.get_as_text()
-		
-		# Extract class_name
-		var class_regex = RegEx.new()
-		class_regex.compile("class_name\\s+([a-zA-Z_][a-zA-Z0-9_]*)")
-		var result = class_regex.search(content)
-		if result:
-			class_name_str = result.get_string(1)
-		
-		# Extract extends
-		var extends_regex = RegEx.new()
-		extends_regex.compile("extends\\s+([a-zA-Z_][a-zA-Z0-9_]*)")
-		result = extends_regex.search(content)
-		if result:
-			extends_class = result.get_string(1)
-		
-		# Add to metadata
-		metadata["class_name"] = class_name_str
-		metadata["extends"] = extends_class
-		
-		# Try to extract methods and signals
-		var methods = []
-		var signals = []
-		
-		var method_regex = RegEx.new()
-		method_regex.compile("func\\s+([a-zA-Z_][a-zA-Z0-9_]*)\\s*\\(")
-		var method_matches = method_regex.search_all(content)
-		
-		for match_result in method_matches:
-			methods.append(match_result.get_string(1))
-		
-		var signal_regex = RegEx.new()
-		signal_regex.compile("signal\\s+([a-zA-Z_][a-zA-Z0-9_]*)")
-		var signal_matches = signal_regex.search_all(content)
-		
-		for match_result in signal_matches:
-			signals.append(match_result.get_string(1))
-		
-		metadata["methods"] = methods
-		metadata["signals"] = signals
-	
+
+	# Extract metadata
+	var metadata = _extract_script_metadata(path, script)
 	_send_success(client_id, metadata, command_id)
 
 func _get_current_script(client_id: int, params: Dictionary, command_id: String) -> void:
@@ -319,3 +271,118 @@ func _create_script_template(client_id: int, params: Dictionary, command_id: Str
 	_send_success(client_id, {
 		"content": content
 	}, command_id)
+
+# Helper function to validate and normalize script path
+func _validate_script_path(path: String) -> Dictionary:
+	var result = {
+		"valid": false,
+		"path": "",
+		"error": ""
+	}
+
+	if path.is_empty():
+		result.error = "Script path cannot be empty"
+		return result
+
+	# Normalize path
+	if not path.begins_with("res://"):
+		path = "res://" + path
+
+	# Check if file exists
+	if not FileAccess.file_exists(path):
+		result.error = "Script file not found: " + path
+		return result
+
+	result.valid = true
+	result.path = path
+	return result
+
+# Helper function to load script resource
+func _load_script_resource(path: String) -> Script:
+	var script = load(path)
+	if not script:
+		push_error("Failed to load script resource: " + path)
+	return script
+
+# Helper function to extract script metadata
+func _extract_script_metadata(path: String, script: Script) -> Dictionary:
+	var metadata = {
+		"path": path,
+		"language": _detect_script_language(path)
+	}
+
+	# Read file content for analysis
+	var file = FileAccess.open(path, FileAccess.READ)
+	if not file:
+		push_error("Failed to read script file for metadata extraction: " + path)
+		return metadata
+
+	var content = file.get_as_text()
+	file.close()
+
+	# Extract class information
+	var class_info = _extract_class_info(content)
+	metadata.merge(class_info)
+
+	# Extract methods and signals
+	var code_elements = _extract_code_elements(content)
+	metadata.merge(code_elements)
+
+	return metadata
+
+# Helper function to detect script language
+func _detect_script_language(path: String) -> String:
+	if path.ends_with(".gd"):
+		return "gdscript"
+	elif path.ends_with(".cs"):
+		return "csharp"
+	else:
+		return "unknown"
+
+# Helper function to extract class information
+func _extract_class_info(content: String) -> Dictionary:
+	var info = {
+		"class_name": "",
+		"extends": ""
+	}
+
+	# Extract class_name
+	var class_regex = RegEx.new()
+	class_regex.compile("class_name\\s+([a-zA-Z_][a-zA-Z0-9_]*)")
+	var result = class_regex.search(content)
+	if result:
+		info.class_name = result.get_string(1)
+
+	# Extract extends
+	var extends_regex = RegEx.new()
+	extends_regex.compile("extends\\s+([a-zA-Z_][a-zA-Z0-9_]*)")
+	result = extends_regex.search(content)
+	if result:
+		info.extends = result.get_string(1)
+
+	return info
+
+# Helper function to extract methods and signals
+func _extract_code_elements(content: String) -> Dictionary:
+	var elements = {
+		"methods": [],
+		"signals": []
+	}
+
+	# Extract methods
+	var method_regex = RegEx.new()
+	method_regex.compile("func\\s+([a-zA-Z_][a-zA-Z0-9_]*)\\s*\\(")
+	var method_matches = method_regex.search_all(content)
+
+	for match_result in method_matches:
+		elements.methods.append(match_result.get_string(1))
+
+	# Extract signals
+	var signal_regex = RegEx.new()
+	signal_regex.compile("signal\\s+([a-zA-Z_][a-zA-Z0-9_]*)")
+	var signal_matches = signal_regex.search_all(content)
+
+	for match_result in signal_matches:
+		elements.signals.append(match_result.get_string(1))
+
+	return elements

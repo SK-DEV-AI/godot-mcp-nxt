@@ -27,7 +27,7 @@ export const screenshotTools: MCPTool[] = [
         .describe('Include metadata like dimensions, timestamp, and format info')
     }),
     execute: async ({ format = 'png', quality = 90, include_metadata = true }: CaptureScreenshotParams): Promise<string> => {
-      const godot = getGodotConnection();
+      const godot = await getGodotConnection();
 
       try {
         const result = await godot.sendCommand<CommandResult>('capture_editor_screenshot', {
@@ -88,7 +88,7 @@ export const screenshotTools: MCPTool[] = [
         .describe('Include metadata like dimensions, timestamp, and format info')
     }),
     execute: async ({ format = 'png', quality = 90, include_metadata = true }: CaptureScreenshotParams): Promise<string> => {
-      const godot = getGodotConnection();
+      const godot = await getGodotConnection();
 
       try {
         const result = await godot.sendCommand<CommandResult>('capture_game_screenshot', {
@@ -142,7 +142,7 @@ export const screenshotTools: MCPTool[] = [
     description: 'Get list of supported screenshot formats and their capabilities',
     parameters: z.object({}),
     execute: async (): Promise<string> => {
-      const godot = getGodotConnection();
+      const godot = await getGodotConnection();
 
       try {
         const result = await godot.sendCommand<CommandResult>('get_supported_screenshot_formats', {});

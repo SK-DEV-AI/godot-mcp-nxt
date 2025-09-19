@@ -166,7 +166,7 @@ GUIDANCE CATEGORIES:
         .describe('Level of detail in response')
     }),
     execute: async (params: any): Promise<string> => {
-      const godot = getGodotConnection();
+      const godot = await getGodotConnection();
 
       try {
         switch (params.operation) {
@@ -221,7 +221,7 @@ async function buildPromptContext(params: any): Promise<any> {
   // Get Godot context if requested
   if (params.include_godot_context) {
     try {
-      const godot = getGodotConnection();
+      const godot = await getGodotConnection();
       const godotResult = await godot.sendCommand<CommandResult>('get_current_context', {});
 
       if (godotResult.result) {
@@ -240,7 +240,7 @@ async function buildPromptContext(params: any): Promise<any> {
   // Add performance context if requested
   if (params.include_performance) {
     try {
-      const godot = getGodotConnection();
+      const godot = await getGodotConnection();
       const perfResult = await godot.sendCommand<CommandResult>('get_performance_metrics', {});
 
       if (perfResult.result) {
@@ -264,7 +264,7 @@ async function buildPromptContext(params: any): Promise<any> {
 
 async function getCurrentGodotContext(): Promise<any> {
   try {
-    const godot = getGodotConnection();
+    const godot = await getGodotConnection();
     const result = await godot.sendCommand<CommandResult>('get_current_context', {});
     return result.result || {};
   } catch (e) {
@@ -339,7 +339,7 @@ async function analyzeProjectState(focusArea?: string): Promise<any> {
   };
 
   try {
-    const godot = getGodotConnection();
+    const godot = await getGodotConnection();
 
     // Get scene complexity
     const sceneResult = await godot.sendCommand<CommandResult>('get_scene_complexity', {});
