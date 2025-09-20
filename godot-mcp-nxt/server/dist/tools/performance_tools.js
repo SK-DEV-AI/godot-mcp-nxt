@@ -76,7 +76,10 @@ PERFORMANCE ANALYSIS FEATURES:
                 switch (params.operation) {
                     case 'get_metrics': {
                         const result = await godot.sendCommand('get_performance_metrics', {});
-                        return formatPerformanceMetrics(result.metrics);
+                        if (!result) {
+                            throw new Error('No result received from get_performance_metrics');
+                        }
+                        return formatPerformanceMetrics(result);
                     }
                     case 'analyze_performance': {
                         const result = await godot.sendCommand('analyze_performance', {

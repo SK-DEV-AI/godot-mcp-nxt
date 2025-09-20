@@ -84,38 +84,43 @@ func _enter_tree():
 	# Store plugin instance for EditorInterface access
 	Engine.set_meta("GodotMCPPlugin", self)
 
+	# Initialize debug manager
+	var debug_manager = preload("res://addons/godot_mcp/utils/debug_manager.gd").new()
+	debug_manager.name = "DebugManager"
+	add_child(debug_manager)
+
 	# Load configuration
 	_load_config()
 
-	print("\n=== MCP SERVER STARTING ===")
+	MCPDebugManager.log_info("=== MCP SERVER STARTING ===", "server")
 
 	# Initialize the command handler
-	print("Creating command handler...")
+	MCPDebugManager.log_info("Creating command handler...", "server")
 	command_handler = preload("res://addons/godot_mcp/command_handler.gd").new()
 	command_handler.name = "CommandHandler"
 	add_child(command_handler)
 
 	# Connect signals
-	print("Connecting command handler signals...")
+	MCPDebugManager.log_info("Connecting command handler signals...", "server")
 	self.connect("command_received", Callable(command_handler, "_handle_command"))
 
 	# Initialize UI Panel
-	print("Initializing UI panel...")
+	MCPDebugManager.log_info("Initializing UI panel...", "server")
 	_initialize_ui_panel()
 
 	# Auto-start server if configured
 	if _config.auto_start:
-		print("Auto-starting server...")
+		MCPDebugManager.log_info("Auto-starting server...", "server")
 		var err = tcp_server.listen(_config.port)
 		if err == OK:
-			print("Listening on port", _config.port)
+			MCPDebugManager.log_info("Listening on port %d" % _config.port, "server")
 			set_process(true)
 		else:
-			printerr("Failed to auto-start server on port", _config.port, "error:", err)
+			MCPDebugManager.log_error("Failed to auto-start server on port %d, error: %d" % [_config.port, err], "server")
 	else:
-		print("Server configured for manual start")
+		MCPDebugManager.log_info("Server configured for manual start", "server")
 
-	print("=== MCP SERVER INITIALIZED ===\n")
+	MCPDebugManager.log_info("=== MCP SERVER INITIALIZED ===", "server")
 
 func _exit_tree():
 	# Clean up UI panel

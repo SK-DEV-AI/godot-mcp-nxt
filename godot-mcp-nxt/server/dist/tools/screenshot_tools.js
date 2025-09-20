@@ -26,8 +26,8 @@ export const screenshotTools = [
                 if (!result || !result.image_data) {
                     throw new Error('Screenshot capture failed - no image data received');
                 }
-                // Convert binary data to base64 for JSON transport
-                const base64Data = Buffer.from(result.image_data).toString('base64');
+                // Image data is already base64 encoded from Godot
+                const base64Data = result.image_data;
                 let response = `Editor screenshot captured successfully\n\n`;
                 response += `📷 **Screenshot Details:**\n`;
                 response += `- Format: ${result.format || format}\n`;
@@ -78,8 +78,8 @@ export const screenshotTools = [
                 if (!result || !result.image_data) {
                     throw new Error('Screenshot capture failed - no image data received');
                 }
-                // Convert binary data to base64 for JSON transport
-                const base64Data = Buffer.from(result.image_data).toString('base64');
+                // Image data is already base64 encoded from Godot
+                const base64Data = result.image_data;
                 let response = `Game screenshot captured successfully\n\n`;
                 response += `🎮 **Screenshot Details:**\n`;
                 response += `- Format: ${result.format || format}\n`;

@@ -20,8 +20,8 @@ var compression_enabled = true # Enable WebSocket compression
 var compression_min_size = 1024 # Minimum message size for compression (bytes)
 
 # Godot 4.5: Enhanced WebSocket configuration
-var inbound_buffer_size = 1048576 # 1 MiB inbound buffer
-var outbound_buffer_size = 1048576 # 1 MiB outbound buffer
+var inbound_buffer_size = 4194304 # 4 MiB inbound buffer (increased for large images)
+var outbound_buffer_size = 4194304 # 4 MiB outbound buffer (increased for large images)
 var max_queued_packets = 8192 # Maximum queued packets
 var heartbeat_interval = 30.0 # Heartbeat interval in seconds
 

@@ -146,7 +146,7 @@ func _on_script_execution_completed(script_node: Node, client_id: int, command_i
 		"output": output
 	}
 
-	print("result_data: ", result_data)
+	# result_data is ready for sending
 	
 	if not error_message.is_empty():
 		result_data["error"] = error_message

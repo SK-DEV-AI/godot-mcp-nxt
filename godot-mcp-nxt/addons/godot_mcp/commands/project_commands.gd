@@ -56,7 +56,6 @@ func _get_project_info(client_id: int, _params: Dictionary, command_id: String) 
 	
 	# Get Godot version info and structure it as expected by the server
 	var version_info = Engine.get_version_info()
-	print("Raw Godot version info: ", version_info)
 	
 	# Create structured version object with the expected properties
 	var structured_version = {
@@ -266,10 +265,13 @@ func _scan_resources(dir: DirAccess, path: String, resources: Dictionary) -> voi
 # New project management command implementations
 
 func _run_project(client_id: int, params: Dictionary, command_id: String) -> void:
+	MCPDebugManager.log_command("run_project", params, command_id, "project_commands")
+
 	var project_path = params.get("projectPath", "")
 	var scene_path = params.get("scene", "")
 
 	if project_path.is_empty():
+		MCPDebugManager.log_error("projectPath is required", "project_commands", {"command_id": command_id})
 		_send_error(client_id, "projectPath is required", command_id)
 		return
 
@@ -280,6 +282,11 @@ func _run_project(client_id: int, params: Dictionary, command_id: String) -> voi
 		if project_path == current_project_path:
 			project_path = "."  # Use current directory
 		else:
+			MCPDebugManager.log_error("Absolute paths not supported", "project_commands", {
+				"provided_path": project_path,
+				"current_project": current_project_path,
+				"command_id": command_id
+			})
 			_send_error(client_id, "Absolute paths are not supported. Use '.' for current project or relative paths. Current project is at: " + current_project_path, command_id)
 			return
 
@@ -293,6 +300,11 @@ func _run_project(client_id: int, params: Dictionary, command_id: String) -> voi
 		var suggestion = ""
 		if FileAccess.file_exists("res://project.godot"):
 			suggestion = " Did you mean '.' for the current project?"
+		MCPDebugManager.log_error("Invalid project path", "project_commands", {
+			"project_path": project_path,
+			"project_file": project_file,
+			"command_id": command_id
+		})
 		_send_error(client_id, "Not a valid Godot project: " + project_path + ". Make sure project.godot exists." + suggestion, command_id)
 		return
 
@@ -301,48 +313,72 @@ func _run_project(client_id: int, params: Dictionary, command_id: String) -> voi
 	if not scene_path.is_empty():
 		args.append(scene_path)
 
-	# Execute Godot in background (non-blocking)
-	var output = []
-	var exit_code = OS.execute("godot", args, output, false, true)
+	MCPDebugManager.log_debug("Starting Godot process", "project_commands", {
+		"command": "godot",
+		"args": args,
+		"project_path": project_path,
+		"scene_path": scene_path,
+		"command_id": command_id
+	})
 
-	if exit_code == 0:
-		_send_success(client_id, {
-			"message": "Godot project started successfully in debug mode",
-			"projectPath": project_path,
-			"scene": scene_path
-		}, command_id)
-	else:
-		_send_error(client_id, "Failed to start project: " + str(output), command_id)
+	# Send immediate response to prevent MCP client timeout
+	MCPDebugManager.log_info("Sending immediate response to MCP client", "project_commands", {
+		"project_path": project_path,
+		"scene_path": scene_path,
+		"command_id": command_id
+	})
+
+	_send_success(client_id, {
+		"message": "Godot project starting in debug mode...",
+		"projectPath": project_path,
+		"scene": scene_path,
+		"status": "starting"
+	}, command_id)
+
+	# Execute Godot in background (non-blocking) after sending response
+	call_deferred("_execute_godot_async", args, project_path, scene_path, command_id)
 
 func _launch_editor(client_id: int, params: Dictionary, command_id: String) -> void:
+	MCPDebugManager.log_command("launch_editor", params, command_id, "project_commands")
+
 	var project_path = params.get("projectPath", "")
 	var wait_for_ready = params.get("waitForReady", false)
 
 	if project_path.is_empty():
+		MCPDebugManager.log_error("projectPath is required", "project_commands", {"command_id": command_id})
 		_send_error(client_id, "projectPath is required", command_id)
 		return
 
 	# Validate project exists
 	var project_file = project_path + "/project.godot"
 	if not FileAccess.file_exists(project_file):
+		MCPDebugManager.log_error("Invalid project path", "project_commands", {
+			"project_path": project_path,
+			"project_file": project_file,
+			"command_id": command_id
+		})
 		_send_error(client_id, "Not a valid Godot project: " + project_path, command_id)
 		return
 
-	# Launch Godot editor in background
-	var args = ["-e", "--path", project_path]
-	var output = []
-	var exit_code = OS.execute("godot", args, output, false, true)
+	# Send immediate response to prevent MCP client timeout
+	MCPDebugManager.log_info("Sending immediate response to MCP client", "project_commands", {
+		"project_path": project_path,
+		"wait_for_ready": wait_for_ready,
+		"command_id": command_id
+	})
 
-	if exit_code == 0:
-		var message = "Godot editor launched successfully for project at " + project_path
-		if wait_for_ready:
-			message += ". Editor is ready for use."
-		_send_success(client_id, {
-			"message": message,
-			"projectPath": project_path
-		}, command_id)
-	else:
-		_send_error(client_id, "Failed to launch editor: " + str(output), command_id)
+	var message = "Godot editor launching for project at " + project_path
+	if wait_for_ready:
+		message += ". Editor will be ready for use."
+
+	_send_success(client_id, {
+		"message": message,
+		"projectPath": project_path,
+		"status": "launching"
+	}, command_id)
+
+	# Launch Godot editor in background (non-blocking) after sending response
+	call_deferred("_execute_godot_editor_async", ["-e", "--path", project_path], project_path, wait_for_ready, command_id)
 
 func _get_debug_output(client_id: int, params: Dictionary, command_id: String) -> void:
 	# For now, return a placeholder since we don't have active process tracking
@@ -460,6 +496,82 @@ func _health_check(client_id: int, params: Dictionary, command_id: String) -> vo
 		health_report.errors.append("project.godot file not found")
 
 	_send_success(client_id, health_report, command_id)
+
+## Asynchronous Godot execution helper
+func _execute_godot_async(args: Array, project_path: String, scene_path: String, command_id: String) -> void:
+	MCPDebugManager.log_debug("Executing Godot asynchronously", "project_commands", {
+		"args": args,
+		"project_path": project_path,
+		"scene_path": scene_path,
+		"command_id": command_id
+	})
+
+	var start_time = Time.get_ticks_msec()
+	var output = []
+	var exit_code = OS.execute("godot", args, output, false, true)
+	var execution_time = Time.get_ticks_msec() - start_time
+
+	MCPDebugManager.log_debug("Async Godot execution result", "project_commands", {
+		"exit_code": exit_code,
+		"execution_time_ms": execution_time,
+		"output": output,
+		"command_id": command_id
+	})
+
+	if exit_code == 0:
+		MCPDebugManager.log_info("Godot project started successfully (async)", "project_commands", {
+			"project_path": project_path,
+			"scene_path": scene_path,
+			"execution_time_ms": execution_time,
+			"command_id": command_id
+		})
+	else:
+		MCPDebugManager.log_error("Failed to start Godot project (async)", "project_commands", {
+			"exit_code": exit_code,
+			"output": output,
+			"project_path": project_path,
+			"command_id": command_id
+		})
+
+## Asynchronous Godot editor execution helper
+func _execute_godot_editor_async(args: Array, project_path: String, wait_for_ready: bool, command_id: String) -> void:
+	MCPDebugManager.log_debug("Executing Godot editor asynchronously", "project_commands", {
+		"args": args,
+		"project_path": project_path,
+		"wait_for_ready": wait_for_ready,
+		"command_id": command_id
+	})
+
+	var start_time = Time.get_ticks_msec()
+	var output = []
+	var exit_code = OS.execute("godot", args, output, false, true)
+	var execution_time = Time.get_ticks_msec() - start_time
+
+	MCPDebugManager.log_debug("Async Godot editor execution result", "project_commands", {
+		"exit_code": exit_code,
+		"execution_time_ms": execution_time,
+		"output": output,
+		"command_id": command_id
+	})
+
+	if exit_code == 0:
+		var message = "Godot editor launched successfully for project at " + project_path
+		if wait_for_ready:
+			message += ". Editor is ready for use."
+
+		MCPDebugManager.log_info("Godot editor launched successfully (async)", "project_commands", {
+			"project_path": project_path,
+			"wait_for_ready": wait_for_ready,
+			"execution_time_ms": execution_time,
+			"command_id": command_id
+		})
+	else:
+		MCPDebugManager.log_error("Failed to launch Godot editor (async)", "project_commands", {
+			"exit_code": exit_code,
+			"output": output,
+			"project_path": project_path,
+			"command_id": command_id
+		})
 
 func _quick_setup(client_id: int, params: Dictionary, command_id: String) -> void:
 	var project_path = params.get("projectPath", "")

@@ -116,9 +116,7 @@ func _get_current_scene(client_id: int, _params: Dictionary, command_id: String)
 	if scene_path.is_empty():
 		scene_path = "Untitled"
 	
-	print("Current scene path: ", scene_path)
-	print("Root node type: ", edited_scene_root.get_class())
-	print("Root node name: ", edited_scene_root.name)
+	# Scene information retrieved successfully
 	
 	_send_success(client_id, {
 		"scene_path": scene_path,

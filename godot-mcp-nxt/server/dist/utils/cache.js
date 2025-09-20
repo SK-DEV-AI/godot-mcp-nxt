@@ -14,7 +14,9 @@ export class SmartCache {
             totalRequests: 0,
             hitRate: 0,
             currentSize: this.cache.size,
-            maxSize
+            maxSize,
+            memoryUsage: 0,
+            memoryPressure: 0
         };
     }
     get(key) {
@@ -62,6 +64,9 @@ export class SmartCache {
         this.cache.set(key, entry);
         this.accessOrder.set(key, ++this.accessCounter);
         this.stats.currentSize = this.cache.size;
+        this.updateMemoryPressure();
+        // Automatic cleanup under memory pressure
+        this.cleanupIfNeeded();
     }
     has(key) {
         const entry = this.cache.get(key);
@@ -127,6 +132,7 @@ export class SmartCache {
             }
         }
         this.stats.currentSize = this.cache.size;
+        this.updateMemoryPressure();
         return cleaned;
     }
     isExpired(entry) {
@@ -158,6 +164,37 @@ export class SmartCache {
             this.stats.hitRate = this.stats.hits / this.stats.totalRequests;
         }
     }
+    // Calculate approximate memory usage of cache
+    calculateMemoryUsage() {
+        let totalSize = 0;
+        for (const entry of this.cache.values()) {
+            // Rough estimation: key size + data size + metadata
+            totalSize += entry.key.length * 2; // UTF-16 chars
+            totalSize += entry.size || 1; // Data size
+            totalSize += 100; // Metadata overhead
+        }
+        return totalSize;
+    }
+    // Update memory pressure metrics
+    updateMemoryPressure() {
+        this.stats.memoryUsage = this.calculateMemoryUsage();
+        // Memory pressure as percentage of max size
+        this.stats.memoryPressure = this.maxSize > 0 ? (this.cache.size / this.maxSize) : 0;
+    }
+    // Get memory pressure level (0-1, where 1 is high pressure)
+    getMemoryPressure() {
+        this.updateMemoryPressure();
+        return this.stats.memoryPressure;
+    }
+    // Force cleanup if memory pressure is high
+    cleanupIfNeeded(memoryPressureThreshold = 0.8) {
+        const pressure = this.getMemoryPressure();
+        if (pressure >= memoryPressureThreshold) {
+            console.log(`High memory pressure detected (${(pressure * 100).toFixed(1)}%), triggering cleanup`);
+            return this.cleanup();
+        }
+        return 0;
+    }
 }
 // Specialized cache for Godot operations
 export class GodotOperationCache extends SmartCache {
@@ -166,16 +203,23 @@ export class GodotOperationCache extends SmartCache {
     }
     // Cache key generation for common operations
     generateKey(operation, params) {
-        const paramStr = JSON.stringify(params, Object.keys(params).sort());
-        return `${operation}:${this.hashString(paramStr)}`;
+        try {
+            const paramStr = JSON.stringify(params, Object.keys(params).sort());
+            return `${operation}:${this.hashString(paramStr)}`;
+        }
+        catch (error) {
+            // Fallback for non-serializable params
+            console.warn('Failed to serialize cache params, using fallback key:', error);
+            return `${operation}:${this.hashString(JSON.stringify({ fallback: true }))}`;
+        }
     }
-    // Simple string hashing for cache keys
+    // Improved string hashing for cache keys using djb2 algorithm
     hashString(str) {
-        let hash = 0;
+        let hash = 5381;
         for (let i = 0; i < str.length; i++) {
             const char = str.charCodeAt(i);
-            hash = ((hash << 5) - hash) + char;
-            hash = hash & hash; // Convert to 32-bit integer
+            hash = ((hash << 5) + hash) + char; // djb2 algorithm
+            hash = hash & 0xFFFFFFFF; // Convert to 32-bit integer
         }
         return Math.abs(hash).toString(36);
     }
@@ -213,17 +257,22 @@ export function getResourceCache() {
 // Periodic cleanup function
 export function startCacheCleanup(intervalMs = 300000) {
     return setInterval(() => {
-        if (globalOperationCache) {
-            const cleanedOps = globalOperationCache.cleanup();
-            if (cleanedOps > 0) {
-                console.log(`Cleaned ${cleanedOps} expired operation cache entries`);
+        try {
+            if (globalOperationCache) {
+                const cleanedOps = globalOperationCache.cleanup();
+                if (cleanedOps > 0) {
+                    console.log(`Cleaned ${cleanedOps} expired operation cache entries`);
+                }
+            }
+            if (globalResourceCache) {
+                const cleanedRes = globalResourceCache.cleanup();
+                if (cleanedRes > 0) {
+                    console.log(`Cleaned ${cleanedRes} expired resource cache entries`);
+                }
             }
         }
-        if (globalResourceCache) {
-            const cleanedRes = globalResourceCache.cleanup();
-            if (cleanedRes > 0) {
-                console.log(`Cleaned ${cleanedRes} expired resource cache entries`);
-            }
+        catch (error) {
+            console.error('Error during cache cleanup:', error);
         }
     }, intervalMs);
 }

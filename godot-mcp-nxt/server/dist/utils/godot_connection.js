@@ -1,4 +1,6 @@
 import WebSocket from 'ws';
+import { connectionLogger } from './logger.js';
+import { getConfig } from './config.js';
 /**
  * Manages WebSocket connection to the Godot editor
  */
@@ -10,7 +12,7 @@ export class GodotConnection {
      * @param maxRetries Maximum number of connection retries
      * @param retryDelay Delay between retries in ms
      */
-    constructor(url = 'ws://localhost:9080', timeout = 20000, maxRetries = 3, retryDelay = 2000) {
+    constructor(url = `ws://localhost:${getConfig().godotWsPort}`, timeout = getConfig().connectionTimeout, maxRetries = getConfig().maxRetries, retryDelay = getConfig().retryDelay) {
         this.url = url;
         this.timeout = timeout;
         this.maxRetries = maxRetries;
@@ -29,22 +31,27 @@ export class GodotConnection {
         let retries = 0;
         const tryConnect = () => {
             return new Promise((resolve, reject) => {
-                console.error(`Connecting to Godot WebSocket server at ${this.url}... (Attempt ${retries + 1}/${this.maxRetries + 1})`);
-                // Use protocol option to match Godot's supported_protocols
-                this.ws = new WebSocket(this.url, {
-                    protocol: 'json',
-                    handshakeTimeout: 8000, // Increase handshake timeout
-                    perMessageDeflate: false // Disable compression for compatibility
-                });
+                connectionLogger.info(`Connecting to Godot WebSocket server`, { attempt: retries + 1, maxAttempts: this.maxRetries + 1, url: this.url });
+                this.ws = new WebSocket(this.url);
                 this.ws.on('open', () => {
                     this.connected = true;
-                    console.error('Connected to Godot WebSocket server');
                     resolve();
                 });
-                this.ws.on('message', (data) => {
+                this.ws.on('message', (data, isBinary) => {
                     try {
-                        const response = JSON.parse(data.toString());
-                        console.error('Received response:', response);
+                        // Handle both Buffer and string messages (ws v8+ compatibility fix)
+                        let messageText;
+                        if (Buffer.isBuffer(data)) {
+                            messageText = data.toString('utf8');
+                        }
+                        else if (typeof data === 'string') {
+                            messageText = data;
+                        }
+                        else {
+                            connectionLogger.warn('Unknown message data type', { dataType: typeof data });
+                            return;
+                        }
+                        const response = JSON.parse(messageText);
                         // Handle command responses
                         if ('commandId' in response) {
                             const commandId = response.commandId;
@@ -62,12 +69,11 @@ export class GodotConnection {
                         }
                     }
                     catch (error) {
-                        console.error('Error parsing response:', error);
+                        connectionLogger.error('Error parsing WebSocket response', { error: error.message });
                     }
                 });
                 this.ws.on('error', (error) => {
-                    const err = error;
-                    console.error('WebSocket error:', err);
+                    console.error('WebSocket error:', error);
                     // Don't terminate the connection on error - let the timeout handle it
                     // Just log the error and allow retry mechanism to work
                 });

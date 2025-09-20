@@ -6,6 +6,8 @@ interface CacheStats {
     hitRate: number;
     currentSize: number;
     maxSize: number;
+    memoryUsage: number;
+    memoryPressure: number;
 }
 export declare class SmartCache<T = any> {
     private cache;
@@ -38,6 +40,10 @@ export declare class SmartCache<T = any> {
     private isExpired;
     private evictLRU;
     private updateHitRate;
+    private calculateMemoryUsage;
+    private updateMemoryPressure;
+    getMemoryPressure(): number;
+    cleanupIfNeeded(memoryPressureThreshold?: number): number;
 }
 export declare class GodotOperationCache extends SmartCache {
     constructor();
@@ -47,5 +53,5 @@ export declare class GodotOperationCache extends SmartCache {
 }
 export declare function getOperationCache(): GodotOperationCache;
 export declare function getResourceCache(): SmartCache;
-export declare function startCacheCleanup(intervalMs?: number): NodeJS.Timeout;
+export declare function startCacheCleanup(intervalMs?: number): ReturnType<typeof setInterval>;
 export {};

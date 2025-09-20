@@ -3,23 +3,18 @@ class_name MCPAdvancedCommands
 extends MCPBaseCommandProcessor
 
 func process_command(client_id: int, command_type: String, params: Dictionary, command_id: String) -> bool:
-	print("AdvancedCommands processing: %s" % command_type)
 
 	match command_type:
 		"ping":
-			print("AdvancedCommands: Handling ping (test command)")
 			_send_success(client_id, {"message": "pong", "timestamp": Time.get_time_string_from_system()}, command_id)
 			return true
 		"generate_complete_scripts":
-			print("AdvancedCommands: Handling generate_complete_scripts")
 			_generate_complete_scripts(client_id, params, command_id)
 			return true
 		"create_character_system":
-			print("AdvancedCommands: Handling create_character_system")
 			_create_character_system(client_id, params, command_id)
 			return true
 		"live_scene_edit":
-			print("AdvancedCommands: Handling live_scene_edit")
 			_live_scene_editor(client_id, params, command_id)
 			return true
 		"refactor_existing_code":

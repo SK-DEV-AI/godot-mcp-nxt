@@ -23,14 +23,14 @@ import { editorStateResource, selectedNodeResource, currentScriptResource } from
  * Main entry point for the Godot MCP server
  */
 async function main() {
-    console.error('Starting Godot MCP server...');
+    console.log('Starting Godot MCP server...');
     // Create FastMCP instance
     const server = new FastMCP({
         name: 'GodotMCP',
         version: '1.0.0',
     });
     // Register all tools using centralized registry system
-    console.error('Initializing tool registry...');
+    console.log('Initializing tool registry...');
     // Register tools by category
     const toolCategories = [
         { name: 'node', tools: nodeTools },
@@ -53,19 +53,17 @@ async function main() {
                 globalToolRegistry.registerTool(tool, category.name);
                 server.addTool(tool);
                 totalToolsRegistered++;
-                if (totalToolsRegistered % 10 === 0) {
-                    console.error(`Registered ${totalToolsRegistered} tools...`);
-                }
+                // Progress tracking during registration
             }
             catch (error) {
                 console.error(`Failed to register tool ${tool.name}:`, error);
             }
         }
     }
-    console.error(`Successfully registered ${totalToolsRegistered} tools in ${toolCategories.length} categories`);
+    console.log(`Successfully registered ${totalToolsRegistered} tools in ${toolCategories.length} categories`);
     // Log registry statistics
     const stats = globalToolRegistry.getStatistics();
-    console.error(`Registry Statistics: ${stats.totalTools} tools across ${stats.categories} categories`);
+    console.log(`Registry Statistics: ${stats.totalTools} tools across ${stats.categories} categories`);
     // Register static resources
     const staticResources = [
         sceneListResource,
@@ -99,10 +97,10 @@ async function main() {
     server.start({
         transportType: 'stdio',
     });
-    console.error('Godot MCP server started');
+    console.log('Godot MCP server started');
     // Handle cleanup
     const cleanup = () => {
-        console.error('Shutting down Godot MCP server...');
+        console.log('Shutting down Godot MCP server...');
         try {
             const godot = getGodotConnectionSync();
             godot.disconnect();

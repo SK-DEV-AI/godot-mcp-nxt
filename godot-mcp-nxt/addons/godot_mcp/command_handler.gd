@@ -8,16 +8,17 @@ var _screenshot_manager = null
 var _fuzzy_matcher = null
 
 func _ready():
-	print("Command handler initializing...")
+	MCPDebugManager.log_info("Command handler initializing...", "command_handler")
 	await get_tree().process_frame
 	_websocket_server = get_parent()
-	print("WebSocket server reference set: ", _websocket_server)
+	MCPDebugManager.log_debug("WebSocket server reference set", "command_handler", {"server": _websocket_server})
 
 	# Initialize command processors
 	_initialize_command_processors()
 
-	print("Command handler initialized and ready to process commands")
-	print("Available command processors: %d" % _command_processors.size())
+	MCPDebugManager.log_info("Command handler initialized and ready to process commands", "command_handler", {
+		"processor_count": _command_processors.size()
+	})
 
 func _initialize_command_processors():
 	# Create and add all command processors
@@ -67,14 +68,22 @@ func _handle_command(client_id: int, command: Dictionary) -> void:
 	var params = command.get("params", {})
 	var command_id = command.get("commandId", "")
 
-	print("Processing command: %s (Client: %d, ID: %s)" % [command_type, client_id, command_id])
+	MCPDebugManager.log_command(command_type, params, command_id, "command_handler")
 
 	# Try screenshot commands first
 	if _handle_screenshot_command(client_id, command_type, params, command_id):
+		MCPDebugManager.log_debug("Command handled by screenshot processor", "command_handler", {
+			"command_type": command_type,
+			"command_id": command_id
+		})
 		return
 
 	# Try fuzzy matching commands
 	if _handle_fuzzy_command(client_id, command_type, params, command_id):
+		MCPDebugManager.log_debug("Command handled by fuzzy matcher", "command_handler", {
+			"command_type": command_type,
+			"command_id": command_id
+		})
 		return
 
 	# Fall back to existing command processors
@@ -83,16 +92,27 @@ func _handle_command(client_id: int, command: Dictionary) -> void:
 	for i in range(_command_processors.size()):
 		var processor = _command_processors[i]
 		var processor_name = processor_names[i] if i < processor_names.size() else "Unknown"
-		print("Trying processor %d: %s" % [i, processor_name])
+
+		MCPDebugManager.log_trace("Trying processor: %s" % processor_name, "command_handler", {
+			"processor_index": i,
+			"command_type": command_type
+		})
 
 		if processor.process_command(client_id, command_type, params, command_id):
-			print("Command %s handled by processor: %s" % [command_type, processor_name])
+			MCPDebugManager.log_debug("Command handled by processor", "command_handler", {
+				"command_type": command_type,
+				"processor": processor_name,
+				"command_id": command_id
+			})
 			processor_found = true
 			return
 
 	# If no processor handled the command, send an error
 	if not processor_found:
-		print("No processor found for command: %s" % command_type)
+		MCPDebugManager.log_error("No processor found for command: %s" % command_type, "command_handler", {
+			"command_type": command_type,
+			"command_id": command_id
+		})
 		_send_error(client_id, "Unknown command: %s" % command_type, command_id)
 
 func _send_error(client_id: int, message: String, command_id: String) -> void:

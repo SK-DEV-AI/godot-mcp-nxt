@@ -7,3 +7,5 @@
 [node name="TestSprite" type="Sprite2D" parent="."]
 position = Vector2(100, 200)
 script = ExtResource("1_ig7tw")
+
+[node name="TestNode" type="Node2D" parent="."]
