@@ -1,0 +1,42 @@
+[gd_scene load_steps=3 format=3 uid="uid://2wueht8pmdil"]
+
+[ext_resource type="Script" uid="uid://bq8jemxhtvwm7" path="res://scripts/player.gd" id="1_xt0il"]
+[ext_resource type="Script" uid="uid://duy3bcwu6hxcs" path="res://scripts/camera.gd" id="2_kq702"]
+
+[node name="parkour_game" type="Node2D"]
+
+[node name="Player" type="CharacterBody2D" parent="."]
+script = ExtResource("1_xt0il")
+
+[node name="Sprite" type="Sprite2D" parent="Player"]
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="Player"]
+
+[node name="Platform1" type="StaticBody2D" parent="."]
+position = Vector2(0, 200)
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="Platform1"]
+
+[node name="Sprite" type="Sprite2D" parent="Platform1"]
+
+[node name="Platform2" type="StaticBody2D" parent="."]
+position = Vector2(300, 100)
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="Platform2"]
+
+[node name="Sprite" type="Sprite2D" parent="Platform2"]
+
+[node name="Platform3" type="StaticBody2D" parent="."]
+position = Vector2(600, 50)
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="Platform3"]
+
+[node name="Sprite" type="Sprite2D" parent="Platform3"]
+
+[node name="Camera2D" type="Camera2D" parent="."]
+script = ExtResource("2_kq702")
+
+[node name="UI" type="CanvasLayer" parent="."]
+
+[node name="ScoreLabel" type="Label" parent="UI"]
+text = "Score: 0"

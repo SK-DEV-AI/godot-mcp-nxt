@@ -69,14 +69,3 @@ static func node_to_dict(node: Node) -> Dictionary:
 	
 	return result
 
-# Create a screenshot of a node (only works for CanvasItem nodes)
-static func take_node_screenshot(node: CanvasItem) -> Image:
-	if not node is CanvasItem:
-		push_error("Can only take screenshots of CanvasItem nodes")
-		return null
-	
-	var viewport = node.get_viewport()
-	if not viewport:
-		return null
-	
-	return viewport.get_texture().get_image()

@@ -1,6 +1,6 @@
 @tool
-class_name MCPDebugManager
 extends Node
+class_name MCPDebugManager
 
 ## Centralized debug logging system for Godot GDScript
 ## Controlled via ProjectSettings or environment variables
@@ -21,6 +21,10 @@ var component_filters: Dictionary = {}
 
 # Performance timing
 var _timers: Dictionary = {}
+
+# Log history for debug output
+var _log_history: Array = []
+var _max_log_history: int = 1000  # Keep last 1000 log entries
 
 func _ready():
 	# Initialize from ProjectSettings
@@ -76,29 +80,50 @@ func _format_message(level: String, component: String, message: String, context:
 
 	return "[%s] %s %s%s%s" % [timestamp, level, component_str, message, context_str]
 
+func _store_log_entry(level: String, component: String, message: String, context: Dictionary = {}):
+	var log_entry = {
+		"timestamp": Time.get_datetime_string_from_system(),
+		"level": level,
+		"component": component,
+		"message": message,
+		"context": context,
+		"unix_time": Time.get_unix_time_from_system()
+	}
+
+	_log_history.append(log_entry)
+
+	# Maintain max history size
+	if _log_history.size() > _max_log_history:
+		_log_history.remove_at(0)
+
 ## Public logging methods
 
 func error(message: String, component: String = "", context: Dictionary = {}):
+	_store_log_entry("ERROR", component, message, context)
 	if _should_log(LogLevel.ERROR, component):
 		var formatted = _format_message("ERROR", component, message, context)
 		push_error(formatted)
 
 func warn(message: String, component: String = "", context: Dictionary = {}):
+	_store_log_entry("WARN", component, message, context)
 	if _should_log(LogLevel.WARN, component):
 		var formatted = _format_message("WARN", component, message, context)
 		push_warning(formatted)
 
 func info(message: String, component: String = "", context: Dictionary = {}):
+	_store_log_entry("INFO", component, message, context)
 	if _should_log(LogLevel.INFO, component):
 		var formatted = _format_message("INFO", component, message, context)
 		print(formatted)
 
 func debug(message: String, component: String = "", context: Dictionary = {}):
+	_store_log_entry("DEBUG", component, message, context)
 	if _should_log(LogLevel.DEBUG, component):
 		var formatted = _format_message("DEBUG", component, message, context)
 		print(formatted)
 
 func trace(message: String, component: String = "", context: Dictionary = {}):
+	_store_log_entry("TRACE", component, message, context)
 	if _should_log(LogLevel.TRACE, component):
 		var formatted = _format_message("TRACE", component, message, context)
 		print(formatted)
@@ -128,10 +153,11 @@ func end_timer(label: String, component: String = "") -> float:
 
 func log_command(command_type: String, params: Dictionary, command_id: String, component: String = "command"):
 	if _should_log(LogLevel.DEBUG, component):
-		debug("Processing command: %s" % command_type, component, {
+		var context = {
 			"commandId": command_id,
 			"params": _truncate_dict(params)
-		})
+		}
+		debug("Processing command: %s" % command_type, component, context)
 
 func log_command_result(command_type: String, result: Dictionary, command_id: String, duration: float = 0.0, component: String = "command"):
 	if _should_log(LogLevel.DEBUG, component):
@@ -145,9 +171,10 @@ func log_command_result(command_type: String, result: Dictionary, command_id: St
 		debug("Command completed: %s" % command_type, component, context)
 
 func log_command_error(command_type: String, error: String, command_id: String, component: String = "command"):
-	error("Command failed: %s - %s" % [command_type, error], component, {
+	var context = {
 		"commandId": command_id
-	})
+	}
+	error("Command failed: %s - %s" % [command_type, error], component, context)
 
 ## Utility methods
 
@@ -182,49 +209,123 @@ func get_log_level_name(level: int) -> String:
 		LogLevel.TRACE: return "TRACE"
 		_: return "UNKNOWN"
 
-## Singleton access
+## Log History Retrieval Methods
 
-static func get_instance() -> MCPDebugManager:
-	var tree = Engine.get_main_loop() if Engine.has_method("get_main_loop") else null
-	if not tree:
-		push_error("Cannot access debug manager - no main loop")
-		return null
+func get_recent_logs(lines: int = 50, filter_type: String = "all", search_pattern: String = "") -> Array:
+	var filtered_logs = []
 
-	# Try to find existing instance
-	var existing = tree.root.find_child("MCPDebugManager", true, false)
-	if existing:
-		return existing
+	# Start from the most recent logs
+	var start_index = max(0, _log_history.size() - lines)
 
-	# Create new instance
-	var debug_manager = MCPDebugManager.new()
-	debug_manager.name = "MCPDebugManager"
-	tree.root.add_child(debug_manager)
+	for i in range(start_index, _log_history.size()):
+		var log_entry = _log_history[i]
+		var include_log = true
 
-	return debug_manager
+		# Apply type filtering
+		if filter_type != "all":
+			match filter_type:
+				"errors":
+					include_log = log_entry.level == "ERROR"
+				"warnings":
+					include_log = log_entry.level == "WARN"
+				"info":
+					include_log = log_entry.level == "INFO"
+
+		# Apply search pattern filtering
+		if include_log and not search_pattern.is_empty():
+			include_log = search_pattern.to_lower() in log_entry.message.to_lower()
+
+		if include_log:
+			filtered_logs.append(log_entry)
+
+	return filtered_logs
+
+func get_logs_by_component(component: String, lines: int = 50) -> Array:
+	var component_logs = []
+
+	# Start from the most recent logs
+	var start_index = max(0, _log_history.size() - lines * 2)  # Search more logs to find component matches
+
+	for i in range(start_index, _log_history.size()):
+		var log_entry = _log_history[i]
+		if log_entry.component == component:
+			component_logs.append(log_entry)
+			if component_logs.size() >= lines:
+				break
+
+	return component_logs
+
+func get_logs_since(timestamp: float) -> Array:
+	var recent_logs = []
+
+	for log_entry in _log_history:
+		if log_entry.unix_time >= timestamp:
+			recent_logs.append(log_entry)
+
+	return recent_logs
+
+func clear_log_history():
+	_log_history.clear()
+	print("Debug log history cleared")
+
+func get_log_statistics() -> Dictionary:
+	var stats = {
+		"total_logs": _log_history.size(),
+		"by_level": {},
+		"by_component": {},
+		"oldest_timestamp": "",
+		"newest_timestamp": ""
+	}
+
+	if _log_history.size() > 0:
+		stats.oldest_timestamp = _log_history[0].timestamp
+		stats.newest_timestamp = _log_history[_log_history.size() - 1].timestamp
+
+		for log_entry in _log_history:
+			# Count by level
+			var level = log_entry.level
+			if stats.by_level.has(level):
+				stats.by_level[level] += 1
+			else:
+				stats.by_level[level] = 1
+
+			# Count by component
+			var component = log_entry.component
+			if component:
+				if stats.by_component.has(component):
+					stats.by_component[component] += 1
+				else:
+					stats.by_component[component] = 1
+
+	return stats
+
 
 ## Convenience functions for global access
 
 static func log_error(message: String, component: String = "", context: Dictionary = {}):
-	var instance = get_instance()
-	if instance:
-		instance.error(message, component, context)
+	_fallback_log("ERROR", component, message, context)
 
 static func log_warn(message: String, component: String = "", context: Dictionary = {}):
-	var instance = get_instance()
-	if instance:
-		instance.warn(message, component, context)
+	_fallback_log("WARN", component, message, context)
 
 static func log_info(message: String, component: String = "", context: Dictionary = {}):
-	var instance = get_instance()
-	if instance:
-		instance.info(message, component, context)
+	_fallback_log("INFO", component, message, context)
 
 static func log_debug(message: String, component: String = "", context: Dictionary = {}):
-	var instance = get_instance()
-	if instance:
-		instance.debug(message, component, context)
+	_fallback_log("DEBUG", component, message, context)
 
 static func log_trace(message: String, component: String = "", context: Dictionary = {}):
-	var instance = get_instance()
-	if instance:
-		instance.trace(message, component, context)
+	_fallback_log("TRACE", component, message, context)
+
+
+## Fallback logging when no instance is available
+static func _fallback_log(level: String, component: String, message: String, context: Dictionary = {}):
+	var timestamp = Time.get_datetime_string_from_system()
+	var context_str = ""
+	if context.size() > 0:
+		context_str = " " + JSON.stringify(context)
+
+	var component_str = "[" + component + "]" if component else ""
+
+	var formatted = "[%s] %s %s%s%s" % [timestamp, level, component_str, message, context_str]
+	print(formatted)

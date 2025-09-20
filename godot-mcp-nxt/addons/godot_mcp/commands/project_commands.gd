@@ -2,6 +2,21 @@
 class_name MCPProjectCommands
 extends MCPBaseCommandProcessor
 
+var _debug_manager = null
+
+func _init():
+	# Debug manager will be found in _ready() when scene tree is available
+	pass
+
+func _ready():
+	# Find debug manager in the scene tree
+	if get_tree() and get_tree().root:
+		_debug_manager = get_tree().root.find_child("DebugManager", true, false)
+		if not _debug_manager:
+			print("Warning: DebugManager not found, using fallback logging")
+	else:
+		print("Warning: Scene tree not available, using fallback logging")
+
 func process_command(client_id: int, command_type: String, params: Dictionary, command_id: String) -> bool:
 	match command_type:
 		"get_project_info":
@@ -69,7 +84,7 @@ func _get_project_info(client_id: int, _params: Dictionary, command_id: String) 
 		"project_version": project_version,
 		"project_path": project_path,
 		"godot_version": structured_version,
-		"current_scene": get_tree().edited_scene_root.scene_file_path if get_tree().edited_scene_root else ""
+		"current_scene": get_tree().edited_scene_root.scene_file_path if (get_tree() and get_tree().edited_scene_root) else ""
 	}, command_id)
 
 func _list_project_files(client_id: int, params: Dictionary, command_id: String) -> void:
@@ -265,13 +280,15 @@ func _scan_resources(dir: DirAccess, path: String, resources: Dictionary) -> voi
 # New project management command implementations
 
 func _run_project(client_id: int, params: Dictionary, command_id: String) -> void:
-	MCPDebugManager.log_command("run_project", params, command_id, "project_commands")
+	if _debug_manager:
+		_debug_manager.log_command("run_project", params, command_id, "project_commands")
 
 	var project_path = params.get("projectPath", "")
 	var scene_path = params.get("scene", "")
 
 	if project_path.is_empty():
-		MCPDebugManager.log_error("projectPath is required", "project_commands", {"command_id": command_id})
+		if _debug_manager:
+			_debug_manager.error("projectPath is required", "project_commands", {"command_id": command_id})
 		_send_error(client_id, "projectPath is required", command_id)
 		return
 
@@ -282,11 +299,12 @@ func _run_project(client_id: int, params: Dictionary, command_id: String) -> voi
 		if project_path == current_project_path:
 			project_path = "."  # Use current directory
 		else:
-			MCPDebugManager.log_error("Absolute paths not supported", "project_commands", {
-				"provided_path": project_path,
-				"current_project": current_project_path,
-				"command_id": command_id
-			})
+			if _debug_manager:
+				_debug_manager.error("Absolute paths not supported", "project_commands", {
+					"provided_path": project_path,
+					"current_project": current_project_path,
+					"command_id": command_id
+				})
 			_send_error(client_id, "Absolute paths are not supported. Use '.' for current project or relative paths. Current project is at: " + current_project_path, command_id)
 			return
 
@@ -300,11 +318,12 @@ func _run_project(client_id: int, params: Dictionary, command_id: String) -> voi
 		var suggestion = ""
 		if FileAccess.file_exists("res://project.godot"):
 			suggestion = " Did you mean '.' for the current project?"
-		MCPDebugManager.log_error("Invalid project path", "project_commands", {
-			"project_path": project_path,
-			"project_file": project_file,
-			"command_id": command_id
-		})
+		if _debug_manager:
+			_debug_manager.error("Invalid project path", "project_commands", {
+				"project_path": project_path,
+				"project_file": project_file,
+				"command_id": command_id
+			})
 		_send_error(client_id, "Not a valid Godot project: " + project_path + ". Make sure project.godot exists." + suggestion, command_id)
 		return
 
@@ -313,20 +332,22 @@ func _run_project(client_id: int, params: Dictionary, command_id: String) -> voi
 	if not scene_path.is_empty():
 		args.append(scene_path)
 
-	MCPDebugManager.log_debug("Starting Godot process", "project_commands", {
-		"command": "godot",
-		"args": args,
-		"project_path": project_path,
-		"scene_path": scene_path,
-		"command_id": command_id
-	})
+	if _debug_manager:
+		_debug_manager.debug("Starting Godot process", "project_commands", {
+			"command": "godot",
+			"args": args,
+			"project_path": project_path,
+			"scene_path": scene_path,
+			"command_id": command_id
+		})
 
 	# Send immediate response to prevent MCP client timeout
-	MCPDebugManager.log_info("Sending immediate response to MCP client", "project_commands", {
-		"project_path": project_path,
-		"scene_path": scene_path,
-		"command_id": command_id
-	})
+	if _debug_manager:
+		_debug_manager.info("Sending immediate response to MCP client", "project_commands", {
+			"project_path": project_path,
+			"scene_path": scene_path,
+			"command_id": command_id
+		})
 
 	_send_success(client_id, {
 		"message": "Godot project starting in debug mode...",
@@ -339,33 +360,37 @@ func _run_project(client_id: int, params: Dictionary, command_id: String) -> voi
 	call_deferred("_execute_godot_async", args, project_path, scene_path, command_id)
 
 func _launch_editor(client_id: int, params: Dictionary, command_id: String) -> void:
-	MCPDebugManager.log_command("launch_editor", params, command_id, "project_commands")
+	if _debug_manager:
+		_debug_manager.log_command("launch_editor", params, command_id, "project_commands")
 
 	var project_path = params.get("projectPath", "")
 	var wait_for_ready = params.get("waitForReady", false)
 
 	if project_path.is_empty():
-		MCPDebugManager.log_error("projectPath is required", "project_commands", {"command_id": command_id})
+		if _debug_manager:
+			_debug_manager.error("projectPath is required", "project_commands", {"command_id": command_id})
 		_send_error(client_id, "projectPath is required", command_id)
 		return
 
 	# Validate project exists
 	var project_file = project_path + "/project.godot"
 	if not FileAccess.file_exists(project_file):
-		MCPDebugManager.log_error("Invalid project path", "project_commands", {
-			"project_path": project_path,
-			"project_file": project_file,
-			"command_id": command_id
-		})
+		if _debug_manager:
+			_debug_manager.error("Invalid project path", "project_commands", {
+				"project_path": project_path,
+				"project_file": project_file,
+				"command_id": command_id
+			})
 		_send_error(client_id, "Not a valid Godot project: " + project_path, command_id)
 		return
 
 	# Send immediate response to prevent MCP client timeout
-	MCPDebugManager.log_info("Sending immediate response to MCP client", "project_commands", {
-		"project_path": project_path,
-		"wait_for_ready": wait_for_ready,
-		"command_id": command_id
-	})
+	if _debug_manager:
+		_debug_manager.info("Sending immediate response to MCP client", "project_commands", {
+			"project_path": project_path,
+			"wait_for_ready": wait_for_ready,
+			"command_id": command_id
+		})
 
 	var message = "Godot editor launching for project at " + project_path
 	if wait_for_ready:
@@ -381,12 +406,50 @@ func _launch_editor(client_id: int, params: Dictionary, command_id: String) -> v
 	call_deferred("_execute_godot_editor_async", ["-e", "--path", project_path], project_path, wait_for_ready, command_id)
 
 func _get_debug_output(client_id: int, params: Dictionary, command_id: String) -> void:
-	# For now, return a placeholder since we don't have active process tracking
-	# In a full implementation, this would track running Godot processes
-	_send_success(client_id, {
-		"message": "Debug output tracking not yet implemented in unified architecture",
-		"note": "This will be implemented when process lifecycle management is added"
-	}, command_id)
+	var lines = params.get("lines", 50)
+	var filter_type = params.get("filter_type", "all")
+	var include_timestamps = params.get("include_timestamps", true)
+	var search_pattern = params.get("search_pattern", "")
+
+	print("DEBUG: _get_debug_output called with params: ", params)
+
+	# Get debug manager for comprehensive logging
+	var debug_manager = _get_debug_manager()
+	var debug_output = []
+
+	if debug_manager:
+		print("DEBUG: Found debug manager, collecting logs...")
+		# Get recent debug logs from the debug manager
+		debug_output = _collect_debug_logs(debug_manager, lines, filter_type, search_pattern)
+		print("DEBUG: Collected ", debug_output.size(), " log entries")
+	else:
+		print("DEBUG: No debug manager found, using fallback...")
+		# Fallback: collect basic Godot output
+		debug_output = _collect_basic_debug_output(lines)
+
+	# Add system information
+	var system_info = {
+		"godot_version": Engine.get_version_info(),
+		"platform": OS.get_name(),
+		"processor_count": OS.get_processor_count(),
+		"memory_usage": Performance.get_monitor(Performance.MEMORY_STATIC),
+		"fps": Performance.get_monitor(Performance.TIME_FPS)
+	}
+
+	# Add process information if available
+	var process_info = _get_process_info()
+
+	var result = {
+		"debug_output": debug_output,
+		"system_info": system_info,
+		"process_info": process_info,
+		"timestamp": Time.get_datetime_string_from_system(),
+		"lines_requested": lines,
+		"filter_applied": filter_type,
+		"total_lines_returned": debug_output.size()
+	}
+
+	_send_success(client_id, result, command_id)
 
 func _stop_project(client_id: int, params: Dictionary, command_id: String) -> void:
 	# For now, return a placeholder since we don't have active process tracking
@@ -499,79 +562,87 @@ func _health_check(client_id: int, params: Dictionary, command_id: String) -> vo
 
 ## Asynchronous Godot execution helper
 func _execute_godot_async(args: Array, project_path: String, scene_path: String, command_id: String) -> void:
-	MCPDebugManager.log_debug("Executing Godot asynchronously", "project_commands", {
-		"args": args,
-		"project_path": project_path,
-		"scene_path": scene_path,
-		"command_id": command_id
-	})
+	if _debug_manager:
+		_debug_manager.debug("Executing Godot asynchronously", "project_commands", {
+			"args": args,
+			"project_path": project_path,
+			"scene_path": scene_path,
+			"command_id": command_id
+		})
 
 	var start_time = Time.get_ticks_msec()
 	var output = []
 	var exit_code = OS.execute("godot", args, output, false, true)
 	var execution_time = Time.get_ticks_msec() - start_time
 
-	MCPDebugManager.log_debug("Async Godot execution result", "project_commands", {
-		"exit_code": exit_code,
-		"execution_time_ms": execution_time,
-		"output": output,
-		"command_id": command_id
-	})
+	if _debug_manager:
+		_debug_manager.debug("Async Godot execution result", "project_commands", {
+			"exit_code": exit_code,
+			"execution_time_ms": execution_time,
+			"output": output,
+			"command_id": command_id
+		})
 
 	if exit_code == 0:
-		MCPDebugManager.log_info("Godot project started successfully (async)", "project_commands", {
-			"project_path": project_path,
-			"scene_path": scene_path,
-			"execution_time_ms": execution_time,
-			"command_id": command_id
-		})
+		if _debug_manager:
+			_debug_manager.info("Godot project started successfully (async)", "project_commands", {
+				"project_path": project_path,
+				"scene_path": scene_path,
+				"execution_time_ms": execution_time,
+				"command_id": command_id
+			})
 	else:
-		MCPDebugManager.log_error("Failed to start Godot project (async)", "project_commands", {
-			"exit_code": exit_code,
-			"output": output,
-			"project_path": project_path,
-			"command_id": command_id
-		})
+		if _debug_manager:
+			_debug_manager.error("Failed to start Godot project (async)", "project_commands", {
+				"exit_code": exit_code,
+				"output": output,
+				"project_path": project_path,
+				"command_id": command_id
+			})
 
 ## Asynchronous Godot editor execution helper
 func _execute_godot_editor_async(args: Array, project_path: String, wait_for_ready: bool, command_id: String) -> void:
-	MCPDebugManager.log_debug("Executing Godot editor asynchronously", "project_commands", {
-		"args": args,
-		"project_path": project_path,
-		"wait_for_ready": wait_for_ready,
-		"command_id": command_id
-	})
+	if _debug_manager:
+		_debug_manager.debug("Executing Godot editor asynchronously", "project_commands", {
+			"args": args,
+			"project_path": project_path,
+			"wait_for_ready": wait_for_ready,
+			"command_id": command_id
+		})
 
 	var start_time = Time.get_ticks_msec()
 	var output = []
 	var exit_code = OS.execute("godot", args, output, false, true)
 	var execution_time = Time.get_ticks_msec() - start_time
 
-	MCPDebugManager.log_debug("Async Godot editor execution result", "project_commands", {
-		"exit_code": exit_code,
-		"execution_time_ms": execution_time,
-		"output": output,
-		"command_id": command_id
-	})
+	if _debug_manager:
+		_debug_manager.debug("Async Godot editor execution result", "project_commands", {
+			"exit_code": exit_code,
+			"execution_time_ms": execution_time,
+			"output": output,
+			"command_id": command_id
+		})
 
 	if exit_code == 0:
 		var message = "Godot editor launched successfully for project at " + project_path
 		if wait_for_ready:
 			message += ". Editor is ready for use."
 
-		MCPDebugManager.log_info("Godot editor launched successfully (async)", "project_commands", {
-			"project_path": project_path,
-			"wait_for_ready": wait_for_ready,
-			"execution_time_ms": execution_time,
-			"command_id": command_id
-		})
+		if _debug_manager:
+			_debug_manager.info("Godot editor launched successfully (async)", "project_commands", {
+				"project_path": project_path,
+				"wait_for_ready": wait_for_ready,
+				"execution_time_ms": execution_time,
+				"command_id": command_id
+			})
 	else:
-		MCPDebugManager.log_error("Failed to launch Godot editor (async)", "project_commands", {
-			"exit_code": exit_code,
-			"output": output,
-			"project_path": project_path,
-			"command_id": command_id
-		})
+		if _debug_manager:
+			_debug_manager.error("Failed to launch Godot editor (async)", "project_commands", {
+				"exit_code": exit_code,
+				"output": output,
+				"project_path": project_path,
+				"command_id": command_id
+			})
 
 func _quick_setup(client_id: int, params: Dictionary, command_id: String) -> void:
 	var project_path = params.get("projectPath", "")
@@ -615,3 +686,120 @@ enabled=PackedStringArray("res://addons/godot_mcp/plugin.cfg")
 		}, command_id)
 	else:
 		_send_error(client_id, "Failed to create project file", command_id)
+
+## Debug Output Helper Functions
+
+func _get_debug_manager():
+	# Try to find debug manager in the scene tree
+	if get_tree() and get_tree().root:
+		var debug_manager = get_tree().root.find_child("DebugManager", true, false)
+		if debug_manager:
+			print("Found DebugManager by name: ", debug_manager)
+			return debug_manager
+
+	# Try to find it by class name
+	for node in get_tree().root.get_children():
+		if node.get_class() == "MCPDebugManager":
+			print("Found DebugManager by class: ", node)
+			return node
+
+	print("DebugManager not found in scene tree")
+	return null
+
+func _collect_debug_logs(debug_manager, lines: int, filter_type: String, search_pattern: String) -> Array:
+	var logs = []
+
+	# Try to get real logs from debug manager
+	if debug_manager and debug_manager.has_method("get_recent_logs"):
+		logs = debug_manager.get_recent_logs(lines, filter_type, search_pattern)
+	else:
+		# Fallback to basic debug output
+		logs = _collect_basic_debug_output(lines)
+
+	return logs
+
+func _collect_basic_debug_output(lines: int) -> Array:
+	var logs = []
+
+	# Collect recent Godot output (this is a simplified version)
+	# In a full implementation, this would capture actual Godot console output
+
+	# Add some basic system information
+	logs.append({
+		"timestamp": Time.get_datetime_string_from_system(),
+		"level": "INFO",
+		"message": "Godot Engine v" + str(Engine.get_version_info().major) + "." + str(Engine.get_version_info().minor),
+		"source": "system"
+	})
+
+	logs.append({
+		"timestamp": Time.get_datetime_string_from_system(),
+		"level": "INFO",
+		"message": "Platform: " + OS.get_name(),
+		"source": "system"
+	})
+
+	logs.append({
+		"timestamp": Time.get_datetime_string_from_system(),
+		"level": "INFO",
+		"message": "Memory usage: " + str(Performance.get_monitor(Performance.MEMORY_STATIC)) + " bytes",
+		"source": "performance"
+	})
+
+	logs.append({
+		"timestamp": Time.get_datetime_string_from_system(),
+		"level": "INFO",
+		"message": "FPS: " + str(Performance.get_monitor(Performance.TIME_FPS)),
+		"source": "performance"
+	})
+
+	# Add scene information
+	var current_scene = ""
+	if get_tree() and get_tree().current_scene:
+		current_scene = get_tree().current_scene.scene_file_path
+		logs.append({
+			"timestamp": Time.get_datetime_string_from_system(),
+			"level": "INFO",
+			"message": "Current scene: " + current_scene,
+			"source": "scene"
+		})
+
+	# Add MCP-specific information
+	logs.append({
+		"timestamp": Time.get_datetime_string_from_system(),
+		"level": "INFO",
+		"message": "MCP Server active - processing commands",
+		"source": "mcp"
+	})
+
+	# Limit to requested number of lines
+	if logs.size() > lines:
+		logs = logs.slice(logs.size() - lines, logs.size())
+
+	return logs
+
+func _get_process_info() -> Dictionary:
+	var process_info = {
+		"running_processes": [],
+		"memory_info": {
+			"static_memory": Performance.get_monitor(Performance.MEMORY_STATIC),
+			"dynamic_memory": 0,  # Not available in current Godot version
+			"max_memory": Performance.get_monitor(Performance.MEMORY_STATIC_MAX)
+		},
+		"performance": {
+			"fps": Performance.get_monitor(Performance.TIME_FPS),
+			"frame_time": Performance.get_monitor(Performance.TIME_PROCESS),
+			"physics_time": Performance.get_monitor(Performance.TIME_PHYSICS_PROCESS),
+			"objects_drawn": Performance.get_monitor(Performance.RENDER_TOTAL_OBJECTS_IN_FRAME)
+		}
+	}
+
+	# Add information about the current Godot process
+	process_info.running_processes.append({
+		"name": "Godot Editor",
+		"type": "editor",
+		"status": "running",
+		"project": ProjectSettings.get_setting("application/config/name", "Unknown Project")
+	})
+
+	return process_info

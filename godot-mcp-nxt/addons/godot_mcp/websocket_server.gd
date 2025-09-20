@@ -17,12 +17,12 @@ var handshake_timeout = 3000 # ms
 var max_connections = 10 # Maximum concurrent connections
 var queue_size = 5 # Maximum queued connections
 var compression_enabled = true # Enable WebSocket compression
-var compression_min_size = 1024 # Minimum message size for compression (bytes)
+var compression_min_size = 4096 # Minimum message size for compression (bytes) - increased for images
 
 # Godot 4.5: Enhanced WebSocket configuration
-var inbound_buffer_size = 4194304 # 4 MiB inbound buffer (increased for large images)
-var outbound_buffer_size = 4194304 # 4 MiB outbound buffer (increased for large images)
-var max_queued_packets = 8192 # Maximum queued packets
+var inbound_buffer_size = 16777216 # 16 MiB inbound buffer (increased for large images)
+var outbound_buffer_size = 16777216 # 16 MiB outbound buffer (increased for large images)
+var max_queued_packets = 32768 # Maximum queued packets (doubled again)
 var heartbeat_interval = 30.0 # Heartbeat interval in seconds
 
 class PendingPeer:

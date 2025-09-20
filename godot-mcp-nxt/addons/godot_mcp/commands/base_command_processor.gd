@@ -290,6 +290,46 @@ func _parse_property_value(value):
 
 	# Handle Dictionary types (like Vector2, Color, etc.)
 	if value_type == TYPE_DICTIONARY:
+		# Handle $type format for creating Godot objects (like shapes)
+		if value.has("$type"):
+			var object_type = value["$type"]
+			if ClassDB.class_exists(object_type):
+				var instance = ClassDB.instantiate(object_type)
+				if instance:
+					# Apply parameters based on object type
+					match object_type:
+						"RectangleShape2D":
+							if value.has("size"):
+								var size_dict = value.size
+								if size_dict.has("x") and size_dict.has("y"):
+									instance.size = Vector2(size_dict.x, size_dict.y)
+						"CircleShape2D":
+							if value.has("radius"):
+								instance.radius = value.radius
+						"CapsuleShape2D":
+							if value.has("radius"):
+								instance.radius = value.radius
+							if value.has("height"):
+								instance.height = value.height
+						"BoxShape3D":
+							if value.has("size"):
+								var size_dict = value.size
+								if size_dict.has("x") and size_dict.has("y") and size_dict.has("z"):
+									instance.size = Vector3(size_dict.x, size_dict.y, size_dict.z)
+						"SphereShape3D":
+							if value.has("radius"):
+								instance.radius = value.radius
+						"CapsuleShape3D":
+							if value.has("radius"):
+								instance.radius = value.radius
+							if value.has("height"):
+								instance.height = value.height
+					print("Successfully created %s object with parameters" % object_type)
+					return instance
+			else:
+				push_error("Invalid object type for $type: %s" % object_type)
+				return value
+
 		# Handle Vector2 format: {"x": 100, "y": 200}
 		if value.has("x") and value.has("y"):
 			if value.has("z"):

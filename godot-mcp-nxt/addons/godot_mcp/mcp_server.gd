@@ -73,7 +73,7 @@ var mcp_panel: Control = null
 const CONFIG_FILE = "user://godot_mcp_config.json"
 var _config = {
 	"port": 9080,
-	"auto_start": false,
+	"auto_start": true,
 	"debug_mode": true,
 	"log_detailed": true,
 	"rate_limit": 100,  # MCP_RATE_LIMIT from USER_GUIDE.md
@@ -85,42 +85,42 @@ func _enter_tree():
 	Engine.set_meta("GodotMCPPlugin", self)
 
 	# Initialize debug manager
-	var debug_manager = preload("res://addons/godot_mcp/utils/debug_manager.gd").new()
+	var debug_manager = load("res://addons/godot_mcp/utils/debug_manager.gd").new()
 	debug_manager.name = "DebugManager"
 	add_child(debug_manager)
 
 	# Load configuration
 	_load_config()
 
-	MCPDebugManager.log_info("=== MCP SERVER STARTING ===", "server")
+	debug_manager.info("=== MCP SERVER STARTING ===", "server")
 
 	# Initialize the command handler
-	MCPDebugManager.log_info("Creating command handler...", "server")
+	debug_manager.info("Creating command handler...", "server")
 	command_handler = preload("res://addons/godot_mcp/command_handler.gd").new()
 	command_handler.name = "CommandHandler"
 	add_child(command_handler)
 
 	# Connect signals
-	MCPDebugManager.log_info("Connecting command handler signals...", "server")
+	debug_manager.info("Connecting command handler signals...", "server")
 	self.connect("command_received", Callable(command_handler, "_handle_command"))
 
 	# Initialize UI Panel
-	MCPDebugManager.log_info("Initializing UI panel...", "server")
+	debug_manager.info("Initializing UI panel...", "server")
 	_initialize_ui_panel()
 
 	# Auto-start server if configured
 	if _config.auto_start:
-		MCPDebugManager.log_info("Auto-starting server...", "server")
+		debug_manager.info("Auto-starting server...", "server")
 		var err = tcp_server.listen(_config.port)
 		if err == OK:
-			MCPDebugManager.log_info("Listening on port %d" % _config.port, "server")
+			debug_manager.info("Listening on port %d" % _config.port, "server")
 			set_process(true)
 		else:
-			MCPDebugManager.log_error("Failed to auto-start server on port %d, error: %d" % [_config.port, err], "server")
+			debug_manager.error("Failed to auto-start server on port %d, error: %d" % [_config.port, err], "server")
 	else:
-		MCPDebugManager.log_info("Server configured for manual start", "server")
+		debug_manager.info("Server configured for manual start", "server")
 
-	MCPDebugManager.log_info("=== MCP SERVER INITIALIZED ===", "server")
+	debug_manager.info("=== MCP SERVER INITIALIZED ===", "server")
 
 func _exit_tree():
 	# Clean up UI panel
@@ -332,10 +332,8 @@ func _process(_delta):
 
 						print("[Client ", id, "] Processing command: ", cmd_type)
 
-						# Handle screenshot and fuzzy matching commands directly
-						if cmd_type in ["capture_editor_screenshot", "capture_game_screenshot", "get_supported_screenshot_formats"]:
-							_handle_screenshot_command(id, cmd_type, params, cmd_id)
-						elif cmd_type in ["fuzzy_match_nodes", "fuzzy_match_scenes", "fuzzy_match_scripts"]:
+						# Handle fuzzy matching commands directly
+						if cmd_type in ["fuzzy_match_nodes", "fuzzy_match_scenes", "fuzzy_match_scripts"]:
 							_handle_fuzzy_command(id, cmd_type, params, cmd_id)
 						else:
 							# Route other commands to command handler via signal
@@ -380,19 +378,9 @@ func stop_server() -> void:
 func get_port() -> int:
 	return port
 
-## Handle screenshot commands
-func _handle_screenshot_command(client_id: int, command_type: String, params: Dictionary, command_id: String) -> void:
-	var command_handler = get_node("CommandHandler")
-	if not command_handler:
-		send_response(client_id, {
-			"status": "error",
-			"message": "Command handler not found",
-			"commandId": command_id
-		})
-		return
+func get_client_count() -> int:
+	return clients.size()
 
-	# Delegate to command handler
-	command_handler._handle_screenshot_command(client_id, command_type, params, command_id)
 
 ## Handle fuzzy matching commands
 func _handle_fuzzy_command(client_id: int, command_type: String, params: Dictionary, command_id: String) -> void:
